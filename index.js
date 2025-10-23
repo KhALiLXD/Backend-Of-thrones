@@ -10,9 +10,10 @@ app.use(express.json())
 app.use(express.static('public'));
 
 
-app.get('/health',(req,res)=>{
-    res.json({ok: true})
-})
+// routes
+app.use('/',require('./routes/test'))
+
+
 
 
 app.listen(port, () => {
