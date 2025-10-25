@@ -1,4 +1,4 @@
 
-exports.ping = (req,res) =>{
+export const ping = (req,res) =>{
     res.json({message: "pong!"})
 }
