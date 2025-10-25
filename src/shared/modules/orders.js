@@ -4,7 +4,7 @@ import User from './users.js';
 import Product from './products.js';
 
 const Order = sequelize.define('Order', {
-  id: { type: DataTypes.BIGINT, primaryKey: true },
+  id: { type: DataTypes.BIGINT,autoIncrement:true, primaryKey: true },
   user_id: { type: DataTypes.BIGINT, allowNull: false },
   product_id: { type: DataTypes.BIGINT, allowNull: false },
   status: { 
