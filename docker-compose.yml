@@ -1,22 +1,42 @@
 version: "3.9"
 services:
   postgres:
-    image: postgres:16
+    image: postgres:16-alpine
     container_name: pg
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
+      POSTGRES_PASSWORD: flashsale_password-2025
       POSTGRES_DB: flashsale
     ports:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: redis
+    command: >
+      redis-server 
+      --appendonly yes
+      --appendfsync everysec
+      --save 60 1000
+      --save 300 100
     ports:
       - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
 
 volumes:
   pgdata:
+  redis_data:
