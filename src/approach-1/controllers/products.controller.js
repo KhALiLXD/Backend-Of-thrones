@@ -10,11 +10,10 @@ export const getProduct = async (req,res) => {
 
 export const createProduct = async (req,res) =>{
     const { name, price, stock } = req.body;
-
     const bodyKeys = Object.keys(req.body);
 
     const requiredColumns = ['name','price','stock']
-    if (!requiredColumns.every(col => bodyKeys.includes(col))) return res.status(400).json({err: "Invalid fields. It must be {name,price,stock}"})
+    if (!requiredColumns.every(col => bodyKeys.includes(col))) return res.status(400).json({err: "Missing Required Fields: ['name','price','stock']"})
 
     try {
         await Product.create({name,price,stock})
