@@ -9,9 +9,12 @@ import '../shared/modules/orders.js';
 import '../shared/modules/IdempotencyKey.js';
 
 import { redis } from '../shared/config/redis.js';
-import orderRoutes from './routes/orders.route.js';
-import productsRoute from './routes/products.route.js';
+
+import orderRoutes from './routes/orders.route.js'
+import productsRoute from './routes/products.route.js'
 import userRoutes from './routes/user.route.js';
+import authRoutes from './routes/auth.route.js'
+
 const app = express();
 const port = 2525;
 
@@ -25,6 +28,7 @@ await sequelize.sync({ alter: true });
 
 // routes
 app.use('/',testRouter )
+app.use('/auth',authRoutes)
 app.use('/order',orderRoutes)
 app.use('/products',productsRoute)
 app.use('/user',userRoutes)
