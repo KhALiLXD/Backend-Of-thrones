@@ -8,7 +8,7 @@ const Order = sequelize.define('Order', {
   user_id: { type: DataTypes.BIGINT, allowNull: false },
   product_id: { type: DataTypes.BIGINT, allowNull: false },
   status: { 
-    type: DataTypes.ENUM('pending', 'canceled', 'failed'), 
+    type: DataTypes.ENUM('pending', 'confirmed', 'canceled', 'failed'),
     allowNull: false 
   },
   total_price: { type: DataTypes.DECIMAL(10,2), allowNull: false },
