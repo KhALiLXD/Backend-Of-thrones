@@ -9,6 +9,7 @@ import '../shared/modules/orders.js';
 import '../shared/modules/IdempotencyKey.js';
 
 import { redis } from '../shared/config/redis.js';
+import { apiRateLimiter } from '../shared/middleware/rateLimiter.js';
 
 import orderRoutes from './routes/orders.route.js'
 import productsRoute from './routes/products.route.js'
@@ -21,6 +22,7 @@ const port = 2525;
 
 app.use(express.json())
 app.use(express.static('public'));
+app.use(apiRateLimiter);
 
 
 await connectDB();
