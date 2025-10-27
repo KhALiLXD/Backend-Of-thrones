@@ -9,7 +9,7 @@ const processPayment = async (paymentDetails) => {
     throw new Error("Order ID is required");
   }
 
-  await new Promise((resolve) => setTimeout(resolve, 100));
+  await new Promise((resolve) => setTimeout(resolve, 2500));
 
   const isSuccess = Math.random() > 0.1;
 
