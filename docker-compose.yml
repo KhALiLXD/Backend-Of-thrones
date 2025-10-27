@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: 1
-      POSTGRES_DB: flashsale_dev
+      POSTGRES_DB: flashsale_dev2
     ports:
       - "5432:5432"
     volumes:
