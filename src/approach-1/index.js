@@ -33,7 +33,6 @@ app.use('/',testRouter )
 app.use('/auth',authRoutes)
 app.use('/order',orderRoutes)
 app.use('/products',productsRoute)
-app.use('/user',userRoutes)
 app.get("/health/redis", async (_req, res) => {
     const pong = await redis.ping();
     res.json({ ok: pong === "PONG" });
