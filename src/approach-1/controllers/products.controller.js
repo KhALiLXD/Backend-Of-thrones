@@ -80,7 +80,7 @@ export const productStockStream = async (req,res) =>{
     try{
         clearInterval(heartbeat);
         sub.off("message", onMessage);
-        await sub.unsubscribe(driverChannel);
+        await sub.unsubscribe(channel);
         await sub.quit();
         res.end();
         console.log('Client disconnected from stock storage stream');
