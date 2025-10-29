@@ -24,7 +24,7 @@ export const register = async (req,res) => {
             password: hashedPassword
         });
 
-        const token = generateToken({
+        const token = await generateToken({
             userId: user.id,
             name: user.name,
             email: user.email
@@ -56,7 +56,7 @@ export const login = async (req,res) => {
         const isValidPassword = await bcrypt.compare(password, user.password);
         if (!isValidPassword) return res.status(401).json({err: 'invalid email or password'})
 
-        const token = generateToken({
+        const token = await generateToken({
             userId: user.id,
             name: user.name,
             email: user.email
