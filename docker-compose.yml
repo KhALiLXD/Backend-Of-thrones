@@ -3,14 +3,9 @@ services:
     container_name: api1
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
-    env_file: .env
+    env_file: .env.docker
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+
       INSTANCE_ID: api1  
     depends_on:
       postgres:
@@ -25,14 +20,9 @@ services:
     container_name: api2
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
-    env_file: .env
+    env_file: .env.docker
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+   
       INSTANCE_ID: api2  
     depends_on:
       postgres:
@@ -46,14 +36,9 @@ services:
     container_name: api3
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
-    env_file: .env
+    env_file: .env.docker
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+
       INSTANCE_ID: api3
     depends_on:
       postgres:
@@ -67,14 +52,9 @@ services:
     container_name: api4
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
-    env_file: .env
+    env_file: .env.docker
     environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+
       INSTANCE_ID: api4
     depends_on:
       postgres:
@@ -88,14 +68,8 @@ services:
   sse1:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.sse.js"]
-    env_file: .env
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+    env_file: .env.docker
+    
     depends_on:
       postgres:
         condition: service_healthy
@@ -107,14 +81,8 @@ services:
   sse2:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.sse.js"]
-    env_file: .env
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: postgres
-      DB_PASS: "1"
-      DB_NAME: flashsale_dev
-      REDIS_URL: redis://redis:6379
+    env_file: .env.docker
+  
     depends_on:
       postgres:
         condition: service_healthy
