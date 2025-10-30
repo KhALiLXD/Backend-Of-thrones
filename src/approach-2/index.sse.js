@@ -9,15 +9,11 @@ import {
   connectDB,
   sequelize,
 } from '../shared/config/db.js';
-import { redis } from '../shared/config/redis.js';
+import { redis } from '../shared/config/redis.js';ء
 import { apiRateLimiter } from '../shared/middleware/rateLimiter.js';
-import authRoutes from '../shared/routes/auth.route.js';
-import orderRoutes from '../shared/routes/orders.route.js';
-import productsRoute from '../shared/routes/products.route.js';
-import testRouter from '../shared/routes/test.js';
 import stockStream from '../shared/routes/sse/products.route.js'
 const app = express();
-const port = 2525;
+const port = 4000;
 
 
 app.use(express.json())
@@ -29,10 +25,6 @@ await connectDB();
 await sequelize.sync({ alter: true });
 
 // routes
-app.use('/',testRouter )
-app.use('/auth',authRoutes)
-app.use('/order',orderRoutes)
-app.use('/products',productsRoute)
 app.use('/stream',stockStream)
 app.get("/health/redis", async (_req, res) => {
     const pong = await redis.ping();

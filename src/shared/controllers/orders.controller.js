@@ -1,8 +1,8 @@
-import Order from '../../shared/modules/orders.js';
-import Product from '../../shared/modules/products.js';
-import { sequelize } from '../../shared/config/db.js';
-import processPayment from '../../shared/utils/processPayment.js';
-
+import Order from '../modules/orders.js';
+import Product from '../modules/products.js';
+import { sequelize } from '../config/db.js';
+import processPayment from '../utils/processPayment.js';
+import { redis } from '../config/redis.js';
 export const getOrder = async (req,res) =>{
     const orderId = req.params.id;
     if (!orderId) return res.status(404).json({err:"order not found"})
@@ -21,6 +21,7 @@ export const buy = async (req,res) => {
         const { productId } = req.body;
 
         if (!productId) return res.status(400).json({err: 'product id required'})
+        const channel = `${productId}:STOCK`;
 
         const product = await Product.findByPk(productId, {
             transaction,
@@ -61,6 +62,8 @@ export const buy = async (req,res) => {
         if (paymentResult.success) {
             order.status = 'confirmed';
             await order.save();
+            await redis.publish(channel,product.stock);
+            await redis.set(channel,product.stock)
 
             return res.status(201).json({
                 message: 'purchase successful',

@@ -1,5 +1,5 @@
-import { redis } from '../../shared/config/redis.js';
-import Product from '../../shared/modules/products.js';
+import { redis } from '../config/redis.js';
+import Product from '../modules/products.js';
 
 export const getProduct = async (req,res) => {
     const productId = req.params.id;
@@ -76,7 +76,7 @@ export const productStockStream = async (req,res) =>{
 
 
 
-    const disconnect = async () => {
+const disconnect = async () => {
     try{
         clearInterval(heartbeat);
         sub.off("message", onMessage);
