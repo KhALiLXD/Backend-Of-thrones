@@ -4,7 +4,7 @@ import '../shared/modules/products.js';
 import '../shared/modules/orders.js';
 
 
-
+import express from 'express';
 import {
   connectDB,
   sequelize,
@@ -17,7 +17,7 @@ import productsRoute from '../shared/routes/products.route.js';
 import testRouter from '../shared/routes/test.js';
 import stockStream from '../shared/routes/sse/products.route.js'
 const app = express();
-const port = 2525;
+const port = 3000;
 
 
 app.use(express.json())
@@ -26,7 +26,7 @@ app.use(apiRateLimiter);
 app.set("trust proxy", 1);
 
 await connectDB();
-await sequelize.sync({ alter: true });
+// await sequelize.sync({ alter: true });
 
 // routes
 app.use('/',testRouter )

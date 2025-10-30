@@ -1,0 +1,158 @@
+services:
+  api1:
+    container_name: api1
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.api.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api1  
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["3000"]
+    # restart: unless-stopped
+
+
+  api2:
+    container_name: api2
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.api.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api2  
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["3000"]
+    # restart: unless-stopped
+
+  api3:
+    container_name: api3
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.api.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api3
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["3000"]
+    # restart: unless-stopped
+  
+  api4:
+    container_name: api4
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.api.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+      INSTANCE_ID: api4
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["3000"]
+    # restart: unless-stopped
+  
+
+  sse1:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.sse.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["4000"]
+    # restart: unless-stopped
+
+  sse2:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.sse.js"]
+    env_file: .env
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASS: "1"
+      DB_NAME: flashsale_dev
+      REDIS_URL: redis://redis:6379
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    expose: ["4000"]
+    # restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server","--appendonly","yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 1s
+      retries: 20
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: "1"
+      POSTGRES_DB: flashsale_dev
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d flashsale_dev -h localhost -p 5432"]
+      interval: 3s
+      timeout: 2s
+      retries: 30
+
+  nginx:
+    image: nginx:alpine
+    depends_on: [api1, api2, sse1, sse2]
+    ports: ["80:80"]
+    volumes:
+      - ./src/loadbalancer/nginx.conf:/etc/nginx/nginx.conf:ro
+    restart: unless-stopped
+
+volumes:
+  pg-data:

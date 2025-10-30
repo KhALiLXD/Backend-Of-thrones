@@ -4,6 +4,7 @@ import '../shared/modules/products.js';
 import '../shared/modules/orders.js';
 
 
+import express from 'express';
 
 import {
   connectDB,
@@ -24,8 +25,17 @@ app.use(express.static('public'));
 app.use(apiRateLimiter);
 app.set("trust proxy", 1);
 
+
+app.use((req, res, next) => {
+  const instanceId = process.env.INSTANCE_ID || `PID-${process.pid}`;
+  res.setHeader('X-Instance-ID', instanceId);
+  console.log(`🧩 ${instanceId} -> ${req.method} ${req.originalUrl}`);
+  next();
+});
+
 await connectDB();
 await sequelize.sync({ alter: true });
+
 
 // routes
 app.use('/',testRouter )
@@ -39,5 +49,5 @@ app.get("/health/redis", async (_req, res) => {
 
 
 app.listen(port, () => {
-    console.log(`Server running on http://localhost:${port}`);
+    // console.log(`Server running on http://localhost:${port}`);
 });
