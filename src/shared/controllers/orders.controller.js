@@ -18,6 +18,7 @@ export const buy = async (req,res) => {
 
     try {
         const userId = req.user.userId;
+        if (!userId) return res.status(401).json({err: "Not Authorized"})
         const { productId } = req.body;
 
         if (!productId) return res.status(400).json({err: 'product id required'})

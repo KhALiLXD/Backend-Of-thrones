@@ -6,7 +6,8 @@
   "author": "",
   "type": "module",
   "scripts": {
-    "start1": "node ./src/approach-1/index.js"
+    "start1": "node ./src/approach-1/index.js",
+    "start2": "node ./src/loadBalancer.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
