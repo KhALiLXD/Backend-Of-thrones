@@ -1,5 +1,10 @@
 import 'dotenv/config'; 
-import express from 'express'
+import express from 'express';
+import morgan from 'morgan';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
 import testRouter  from './routes/test.js';
 
 import { connectDB, sequelize } from '../shared/config/db.js';
@@ -22,6 +27,10 @@ const port = 2525;
 app.use(express.json())
 app.use(express.static('public'));
 app.use(apiRateLimiter);
+
+if (process.env.NODE_ENV === "development") {
+  app.use(morgan("dev"));
+}
 
 
 await connectDB();

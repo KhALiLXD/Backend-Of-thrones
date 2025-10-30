@@ -6,23 +6,35 @@
   "author": "",
   "type": "module",
   "scripts": {
-    "start1": "node ./src/approach-1/index.js"
+    "start1": "node ./src/approach-1/index.js",
+    "dev1": "cross-env NODE_ENV=development nodemon ./src/approach-1/index.js",
+    "start2": "node ./src/approach-2/index.js",
+    "dev2": "cross-env NODE_ENV=development nodemon ./src/approach-2/index.js",
+    "insert-product": "node ./scripts/insertProduct.js",
+    "init-stock": "node ./scripts/initStock.js",
+    "worker:orders": "node ./src/approach-2/workers/orderWorker.js",
+    "worker:payments": "node ./src/approach-2/workers/paymentWorker.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
+    "cross-env": "^10.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "helmet": "^8.1.0",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
     "mysql2": "^3.15.2",
     "pg": "^8.16.3",
     "pg-hstore": "^2.3.4",
     "rate-limiter-flexible": "^8.1.0",
     "redis": "^5.9.0",
     "sequelize": "^6.37.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
   }
 }
