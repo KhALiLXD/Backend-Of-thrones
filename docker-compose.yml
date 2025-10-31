@@ -5,8 +5,8 @@ services:
     container_name: pg
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_DB: flashsale_dev2
+      POSTGRES_PASSWORD: 123456
+      POSTGRES_DB: flashsale
     ports:
       - "5432:5432"
     volumes:
