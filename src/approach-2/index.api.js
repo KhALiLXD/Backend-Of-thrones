@@ -12,6 +12,7 @@ import {
 } from '../shared/config/db.js';
 import { redis } from '../shared/config/redis.js';
 import { apiRateLimiter } from '../shared/middleware/rateLimiter.js';
+// import { setupCluster } from '../shared/config/cluster.js';
 import authRoutes from '../shared/routes/auth.route.js';
 import orderRoutes from '../shared/routes/orders.route.js';
 import productsRoute from '../shared/routes/products.route.js';
@@ -22,7 +23,7 @@ const port = 3000;
 
 app.use(express.json())
 app.use(express.static('public'));
-app.use(apiRateLimiter);
+// app.use(apiRateLimiter); // disabled for test
 app.set("trust proxy", 1);
 
 
