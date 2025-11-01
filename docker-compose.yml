@@ -54,42 +54,18 @@ services:
     command: ["node","src/approach-2/index.api.js"]
     env_file: .env.docker
     environment:
-
-      INSTANCE_ID: api4
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["3000"]
-    # restart: unless-stopped
-  
-
-  sse1:
-    build: { context: ., dockerfile: Dockerfile }
-    command: ["node","src/approach-2/index.sse.js"]
-    env_file: .env.docker
-    
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["4000"]
-    # restart: unless-stopped
-
-  sse2:
-    build: { context: ., dockerfile: Dockerfile }
-    command: ["node","src/approach-2/index.sse.js"]
-    env_file: .env.docker
-  
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["4000"]
-    # restart: unless-stopped
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 1
+      POSTGRES_DB: flashsale_dev2
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine

@@ -19,7 +19,7 @@ const port = 4000;
 
 app.use(express.json())
 app.use(express.static('public'));
-app.use(apiRateLimiter);
+// app.use(apiRateLimiter); // disabled for test
 app.set("trust proxy", 1);
 
 app.use((req, res, next) => {
