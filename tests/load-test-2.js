@@ -23,7 +23,7 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_IDS = [1,2,3];
+const PRODUCT_IDS = [4];
 const MAX_RETRIES = 3;
 
 let TEST_USERS = [];

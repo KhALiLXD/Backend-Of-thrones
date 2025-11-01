@@ -4,7 +4,7 @@ import Order from '../../shared/modules/orders.js';
 import Product from '../../shared/modules/products.js';
 import { Queue, QUEUES } from '../../shared/utils/queue.js';
 import { setupCluster } from '../../shared/config/cluster.js';
-
+import { redis } from '../../shared/config/redis.js';
 const workerCount = process.env.ORDER_WORKERS || 4;
 
 const startOrderWorker = async () => {
@@ -18,9 +18,9 @@ const startOrderWorker = async () => {
             if (!orderData) {
                 continue;
             }
-
+            
             console.log(`[Order Worker ${process.pid}] Processing order:`, orderData);
-
+            
             const transaction = await sequelize.transaction();
 
             try {

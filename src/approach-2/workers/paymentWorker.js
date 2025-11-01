@@ -41,44 +41,76 @@ const startPaymentWorker = async () => {
                 const transaction = await sequelize.transaction();
 
                 try {
+                    // CRITICAL: Check product stock in database FIRST before committing
+                    const product = await Product.findByPk(paymentData.productId, {
+                        attributes: ['id', 'stock'],
+                        transaction,
+                        lock: transaction.LOCK.UPDATE // Row-level lock to prevent race conditions
+                    });
+
+                    if (!product) {
+                        await transaction.rollback();
+                        console.error(`[Payment Worker ${process.pid}] ❌ Product not found: ${paymentData.productId}`);
+                        
+                        // Refund stock in Redis
+                        await redis.incr(stockKey);
+                        
+                        // Update order to failed
+                        await Order.update(
+                            { status: 'failed' },
+                            { where: { id: paymentData.orderId } }
+                        );
+                        continue;
+                    }
+
+                    // Calculate new stock
+                    const newStock = product.stock - 1;
+
+                    // CRITICAL CHECK: Prevent negative stock!
+                    if (newStock < 0) {
+                        await transaction.rollback();
+                        console.error(`[Payment Worker ${process.pid}] ❌ Insufficient stock! Current: ${product.stock}`);
+                        
+                        // Refund stock in Redis
+                        await redis.incr(stockKey);
+                        
+                        // Update order to failed (oversold)
+                        await Order.update(
+                            { status: 'failed' },
+                            { where: { id: paymentData.orderId } }
+                        );
+                        
+                        // Sync Redis with actual database stock
+                        await redis.set(stockKey, product.stock.toString());
+                        await redis.publish(stockKey, product.stock.toString());
+                        
+                        continue;
+                    }
+
                     // Update order status
                     await Order.update(
                         { status: 'confirmed' },
                         { where: { id: paymentData.orderId }, transaction }
                     );
 
-                    // Get current cache stock and convert to number
-                    const cacheStock = await redis.get(stockKey);
-                    const newStock = parseInt(cacheStock || '0') - 1;
-
-                    // Update database stock
-                    const [affectedRows, updatedRows] = await Product.update(
+                    // Update database stock (now we're sure it won't go negative)
+                    await Product.update(
                         { stock: newStock },
                         {
                             where: { id: paymentData.productId },
-                            returning: true,
                             transaction
                         }
                     );
 
-                    if (affectedRows === 0) {
-                        await transaction.rollback();
-                        console.error(`[Payment Worker ${process.pid}] ❌ Product not found: ${paymentData.productId}`);
-                        continue;
-                    }
-
-                    // Get the actual stock from database after update
-                    const finalStock = updatedRows[0].dataValues.stock;
-
-                    // Update Redis cache with new stock
-                    await redis.set(stockKey, finalStock.toString());
+                    // Update Redis cache with actual stock from database
+                    await redis.set(stockKey, newStock.toString());
 
                     // Publish stock update for real-time updates
-                    await redis.publish(stockKey, finalStock.toString());
+                    await redis.publish(stockKey, newStock.toString());
 
                     await transaction.commit();
 
-                    console.log(`[Payment Worker ${process.pid}] ✅ Payment successful for order ${paymentData.orderId}, stock updated to ${finalStock}`);
+                    console.log(`[Payment Worker ${process.pid}] ✅ Payment successful for order ${paymentData.orderId}, stock updated to ${newStock}`);
 
                 } catch (err) {
                     await transaction.rollback();
@@ -86,6 +118,16 @@ const startPaymentWorker = async () => {
 
                     // Refund stock in Redis if database update failed
                     await redis.incr(stockKey);
+                    
+                    // Update order to failed
+                    try {
+                        await Order.update(
+                            { status: 'failed' },
+                            { where: { id: paymentData.orderId } }
+                        );
+                    } catch (orderErr) {
+                        console.error(`[Payment Worker ${process.pid}] ❌ Error updating order status:`, orderErr.message);
+                    }
                 }
 
             } else {
@@ -98,13 +140,6 @@ const startPaymentWorker = async () => {
                     // Refund stock in Redis
                     await redis.incr(stockKey);
 
-                    // Refund stock in database 
-                    await Product.increment('stock', {
-                        by: 1,
-                        where: { id: paymentData.productId },
-                        transaction
-                    });
-
                     // Update order status to failed
                     await Order.update(
                         { status: 'failed' },
@@ -113,7 +148,7 @@ const startPaymentWorker = async () => {
 
                     await transaction.commit();
 
-                    console.log(`[Payment Worker ${process.pid}] 🔄 Stock refunded in Redis and database for product ${paymentData.productId}`);
+                    console.log(`[Payment Worker ${process.pid}] 🔄 Stock refunded for product ${paymentData.productId}`);
 
                 } catch (err) {
                     await transaction.rollback();
