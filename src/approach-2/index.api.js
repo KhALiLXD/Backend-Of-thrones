@@ -29,7 +29,7 @@ app.set("trust proxy", 1);
 app.use((req, res, next) => {
   const instanceId = process.env.INSTANCE_ID || `PID-${process.pid}`;
   res.setHeader('X-Instance-ID', instanceId);
-  console.log(`🧩 ${instanceId} -> ${req.method} ${req.originalUrl}`);
+  console.log(` 🧩 ${instanceId} -> ${req.method} ${req.originalUrl}`);
   next();
 });
 
