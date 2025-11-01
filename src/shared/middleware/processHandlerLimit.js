@@ -20,7 +20,7 @@ export const processHandlerLimit = async (req,res,next) =>{
         const dec = async () => {
             const count = await redis.decr(KEY).catch(() => {});
             console.log("[redis-limiter] Mission Done.... Current Process: ",count )
-            if (count <= 0) await redis.set(KEY, 0);
+            if (count < 1) await redis.set(KEY, 0);
         };
         res.on('finish',dec);
         res.on('close',dec);

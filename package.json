@@ -21,7 +21,6 @@
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "cross-env": "^10.0.0",
-    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
@@ -35,7 +34,7 @@
     "rate-limiter-flexible": "^8.1.0",
     "redis": "^5.9.0",
     "sequelize": "^6.37.7"
- },
+  },
   "devDependencies": {
     "nodemon": "^3.1.10"
   }

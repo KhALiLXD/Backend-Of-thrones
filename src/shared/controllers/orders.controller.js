@@ -109,49 +109,45 @@ export const buy = async (req,res) => {
     }
 }
 
-export const flashBuy = async (req,res) => {
+export const flashBuy = async (req, res) => {
     try {
         const userId = req.user.userId;
         const { productId } = req.body;
 
-        if (!productId) return res.status(400).json({err: 'product id required'})
-
-        // Get product data from Redis FIRST (before DECR)
+        if (!productId) return res.status(400).json({ err: 'product id required' });
         const productDataKey = `product:${productId}:data`;
-        const productData = await redis.get(productDataKey);
-
+        let productData = await redis.get(productDataKey);
         if (!productData) {
-            return res.status(404).json({err: 'product not found'})
+            const dbProduct = await Product.findByPk(productId);
+            if (!dbProduct) return res.status(404).json({ err: 'product not found' });
+            productData = dbProduct.toJSON();
+            await redis.set(productDataKey, JSON.stringify(productData), 'EX', 500 );
+            await redis.set(stockKey, String(productData.stock));
+        } else {
+            productData = JSON.parse(productData);
         }
 
-        const product = JSON.parse(productData);
-        const stockKey = `product:${productId}:stock`;
+        if (productData.stock < 1 ) return res.status(400).json({ err: 'product out of stock' });
 
-        // Atomic DECR on Redis (CRITICAL for flash sale!)
-        const newStock = await redis.decr(stockKey);
+        // const newStock = await redis.decr(stockKey);
 
-        if (newStock < 0) {
-            await redis.incr(stockKey);
-            return res.status(400).json({err: 'product out of stock'})
-        }
+        // if (newStock < 1) {
+        //     await redis.incr(stockKey);
+        //     return res.status(400).json({ err: 'product out of stock' });
+        // }
 
-        // Generate order ID
         const orderId = `${Date.now()}_${userId}_${productId}`;
-
-        // Create order data
         const orderData = {
             orderId,
             userId,
             productId,
-            price: product.price,
+            price: productData.price,
             timestamp: Date.now()
         };
 
-        // Add to order queue (will be processed by order worker)
         await Queue.push(QUEUES.ORDERS, orderData);
 
-        // Immediate response! 
-        const response = {
+        return res.status(202).json({
             success: true,
             orderId,
             status: 'processing',
@@ -159,15 +155,12 @@ export const flashBuy = async (req,res) => {
             checkStatusUrl: `/order/${orderId}`,
             product: {
                 id: productId,
-                name: product.name,
-                price: product.price
+                name: productData.name,
+                price: productData.price
             }
-        };
-
-        return res.status(202).json(response);
-
+        });
     } catch (err) {
         console.error('Buy Error', err);
-        return res.status(500).json({error: 'failed to process order'});
+        return res.status(500).json({ error: 'failed to process order' });
     }
 };

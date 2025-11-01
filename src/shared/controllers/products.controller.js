@@ -28,6 +28,7 @@ export const createProduct = async (req,res) =>{
     try {
         const product = await Product.create({name,price,stock})
         await redis.set(`${product.id}:STOCK`,String(product.stock))
+        await redis.set(`product:${product.id}:data`,JSON.stringify(product))
         return res.json({message:`success create ${name} Product with id ${product.id}`})
     }catch(err){
         return res.status(500).json({ error: err.message });

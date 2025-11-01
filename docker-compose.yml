@@ -1,77 +1,64 @@
 services:
-  api1:
-    container_name: api1
+  api:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
     env_file: .env.docker
     environment:
-
-      INSTANCE_ID: api1  
+      SERVICE: api
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
     expose: ["3000"]
-    # restart: unless-stopped
-
-
-  api2:
-    container_name: api2
-    build: { context: ., dockerfile: Dockerfile }
-    command: ["node","src/approach-2/index.api.js"]
-    env_file: .env.docker
-    environment:
-   
-      INSTANCE_ID: api2  
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["3000"]
-    # restart: unless-stopped
-
-  api3:
-    container_name: api3
-    build: { context: ., dockerfile: Dockerfile }
-    command: ["node","src/approach-2/index.api.js"]
-    env_file: .env.docker
-    environment:
-
-      INSTANCE_ID: api3
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-    expose: ["3000"]
-    # restart: unless-stopped
-  
-  api4:
-    container_name: api4
-    build: { context: ., dockerfile: Dockerfile }
-    command: ["node","src/approach-2/index.api.js"]
-    env_file: .env.docker
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 1
-      POSTGRES_DB: flashsale_dev2
-    ports:
-      - "5432:5432"
-    volumes:
-      - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL","curl -sf http://localhost:3000/health || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+
+  sse:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/index.sse.js"]
+    env_file: .env.docker
+    environment:
+      SERVICE: sse
+    depends_on:
+      redis: { condition: service_healthy }
+    expose: ["4000"]
+    healthcheck:
+      test: ["CMD-SHELL","curl -sf http://localhost:4000/health || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 30
+
+  worker-order:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/workers/orderWorker.js"]
+    env_file: .env.docker
+    environment:
+      SERVICE: worker-order
+      WORKER_CONCURRENCY: "2"     # jobs متزامنة داخل العملية
+      THREADS: "0"                # 0 لو I/O فقط
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+
+  worker-payment:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/approach-2/workers/paymentWorker.js"]
+    env_file: .env.docker
+    environment:
+      SERVICE: worker-payment
+      WORKER_CONCURRENCY: "2"
+      THREADS: "4"                # لو بدك توقيع/تشفير ثقيل
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
 
   redis:
     image: redis:7-alpine
     command: ["redis-server","--appendonly","yes"]
     healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
+      test: ["CMD","redis-cli","ping"]
       interval: 3s
       timeout: 1s
       retries: 20
@@ -85,14 +72,14 @@ services:
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d flashsale_dev -h localhost -p 5432"]
+      test: ["CMD-SHELL","pg_isready -U postgres -d flashsale_dev -h localhost -p 5432"]
       interval: 3s
       timeout: 2s
       retries: 30
 
   nginx:
     image: nginx:alpine
-    depends_on: [api1, api2, sse1, sse2]
+    depends_on: [api, sse]
     ports: ["80:80"]
     volumes:
       - ./src/loadbalancer/nginx.conf:/etc/nginx/nginx.conf:ro

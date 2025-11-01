@@ -8,5 +8,5 @@ import { processHandlerLimit } from '../middleware/processHandlerLimit.js';
 const router = express.Router()
 router.get('/:id',getOrder)
 router.post('/buy',verifyToken,processHandlerLimit,idempotency,buy)
-router.post('/buy-flash',verifyToken,idempotency,flashBuy)
+router.post('/buy-flash',verifyToken,processHandlerLimit,idempotency,flashBuy)
 export default router;
