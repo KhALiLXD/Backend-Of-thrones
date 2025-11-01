@@ -5,7 +5,7 @@ const KEY = "CURRENT_PROCESS";
 export const processHandlerLimit = async (req,res,next) =>{
     try { 
         const currentProcess = await redis.incr(KEY);
-        console.log("gote process",currentProcess)
+        console.log("Current Process",currentProcess)
         // For memory leak
         if(currentProcess === 1) {
             await redis.expire(KEY,60);

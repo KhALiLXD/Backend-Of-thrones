@@ -8,18 +8,20 @@
   "scripts": {
     "start1": "node ./src/approach-1/index.js",
     "dev1": "cross-env NODE_ENV=development nodemon ./src/approach-1/index.js",
-    "start2": "node ./src/approach-2/index.js",
+    "start-2": "node ./src/approach-2/index.js",
     "dev2": "cross-env NODE_ENV=development nodemon ./src/approach-2/index.js",
     "insert-product": "node ./scripts/insertProduct.js",
     "init-stock": "node ./scripts/initStock.js",
     "worker:orders": "node ./src/approach-2/workers/orderWorker.js",
-    "worker:payments": "node ./src/approach-2/workers/paymentWorker.js"
+    "worker:payments": "node ./src/approach-2/workers/paymentWorker.js",
+    "start2": "node ./src/loadBalancer.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
     "cross-env": "^10.0.0",
+    "crypto": "^1.0.1",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
