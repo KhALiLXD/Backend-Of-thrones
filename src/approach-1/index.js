@@ -19,11 +19,17 @@ import stockStream from '../shared/routes/sse/products.route.js'
 const app = express();
 const port = 3000;
 
-
+let connections = 0;
 app.use(express.json())
 app.use(express.static('public'));
-app.use(apiRateLimiter);
+// app.use(apiRateLimiter);
 app.set("trust proxy", 1);
+app.use((req, res, next) => {
+  connections++;
+  const date = new Date; 
+  console.log(`\[${date.toString()}\]🧩 Req resived ${connections} -> ${req.method} ${req.originalUrl}`);
+  next();
+});
 
 await connectDB();
 // await sequelize.sync({ alter: true });

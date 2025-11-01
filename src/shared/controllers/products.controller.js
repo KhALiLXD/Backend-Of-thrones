@@ -2,11 +2,20 @@ import { redis } from '../config/redis.js';
 import Product from '../modules/products.js';
 
 export const getProduct = async (req,res) => {
-    const productId = req.params.id;
-    if (!productId) return res.status(404).json({err:"product not found"})
+    try {
+    const productId = Number(req.params.id);
+    if (!Number.isFinite(productId)) return res.status(400).json({err:"invalid product id"})
+    console.log("product id = ",productId)
     const product = await Product.findByPk(productId);
+    if (!product) {
+      return res.status(404).json({ err: 'product not found' });
+    }
+    return res.json(product.toJSON());
+    }catch (err){
+    console.error('[getProduct] error:', e);
 
-    return res.json(product.toJSON())
+      return res.status(500).json({ err: 'internal error' });
+    }
 }
 
 export const createProduct = async (req,res) =>{

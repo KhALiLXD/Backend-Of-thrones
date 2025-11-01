@@ -1,0 +1,73 @@
+======================================================================  source=console
+INFO[0482] 📊 FLASH SALE TEST COMPLETED                   source=console                                                                     
+INFO[0482] ======================================================================  source=console                                            
+INFO[0482] Started:  2025-10-31T18:04:39.336Z            source=console                                                                      
+INFO[0482] Ended:    2025-10-31T18:11:53.349Z            source=console                                                                      
+INFO[0482] ======================================================================  source=console                                            
+INFO[0482]                                                                                                                                   
+💡 Check the metrics above for:               source=console                                                                                 
+INFO[0482]    • Successful purchases (successful_purchases)  source=console                                                                  
+INFO[0482]    • Out of stock attempts (out_of_stock_attempts)  source=console                                                                
+INFO[0482]    • Failed purchases (failed_purchases)      source=console                                                                      
+INFO[0482]    • Response times (purchase_latency p95, p99)  source=console
+INFO[0482]    • Error rates                              source=console                                                                      
+INFO[0482]    • HTTP request duration (http_req_duration)  source=console                                                                    
+INFO[0482]    • Throughput (http_reqs per second)        source=console                                                                      
+INFO[0482]                                                                                                                                   
+======================================================================  source=console                                                       
+
+
+  █ THRESHOLDS
+
+    errors
+    ✗ 'rate<0.1' rate=100.00%
+
+    http_req_duration
+    ✗ 'p(95)<1000' p(95)=11.91s
+    ✗ 'p(99)<2000' p(99)=26.2s
+
+    purchase_latency
+    ✗ 'p(95)<800' p(95)=15089.6
+    ✗ 'p(99)<1500' p(99)=42564.9
+
+
+  █ TOTAL RESULTS
+
+    checks_total.......: 576704 1215.84342/s
+    checks_succeeded...: 4.45%  25686 out of 576704
+    checks_failed......: 95.54% 551018 out of 576704
+
+    ✗ product page loaded
+      ↳  3% — ✓ 8783 / ✗ 275509
+    ✗ product has valid data
+      ↳  3% — ✓ 8783 / ✗ 275509
+    ✓ rate limit active
+
+    CUSTOM
+    errors.........................: 100.00% 276172 out of 276172
+    failed_purchases...............: 663     1.397778/s
+    purchase_latency...............: avg=7191.356712 min=4        med=4915   max=75234  p(90)=13676.8 p(95)=15089.6
+
+    HTTP
+    http_req_duration..............: avg=2.85s       min=0s       med=0s     max=1m0s   p(90)=8.07s   p(95)=11.91s
+      { expected_response:true }...: avg=23.41s      min=20.1ms   med=20.22s max=59.71s p(90)=42.65s  p(95)=51.38s
+    http_req_failed................: 96.97%  285212 out of 294095
+    http_reqs......................: 294095  620.029462/s
+
+    EXECUTION
+    iteration_duration.............: avg=10.82s      min=503.58ms med=7.27s  max=2m17s  p(90)=31.5s   p(95)=34.42s
+    iterations.....................: 282797  596.210312/s
+    vus............................: 3327    min=0                max=15000
+    vus_max........................: 15000   min=2637             max=15000
+
+    NETWORK
+    data_received..................: 42 MB   88 kB/s
+    data_sent......................: 15 MB   31 kB/s
+
+
+
+                                                                                                                                             
+running (7m54.8s), 00000/15000 VUs, 282797 complete and 3504 interrupted iterations                                                          
+flash_sale ✗ [===================================>--] 01738/15000 VUs  7m13.2s/7m30.0s                                                       
+ERRO[0482] test run was aborted because k6 received a 'interrupt' signal
+PS C:\Users\MSI2022\Desktop\Backend Of thrones\tests> 

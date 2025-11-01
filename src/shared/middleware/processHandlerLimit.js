@@ -5,7 +5,7 @@ const KEY = "CURRENT_PROCESS";
 export const processHandlerLimit = async (req,res,next) =>{
     try { 
         const currentProcess = await redis.incr(KEY);
-        console.log("Current Process",currentProcess)
+        console.log("[redis-limiter] Current Process",currentProcess)
         // For memory leak
         if(currentProcess === 1) {
             await redis.expire(KEY,60);
@@ -19,7 +19,8 @@ export const processHandlerLimit = async (req,res,next) =>{
 
         const dec = async () => {
             const count = await redis.decr(KEY).catch(() => {});
-            if (count < 0) await redis.set(KEY, 0);
+            console.log("[redis-limiter] Mission Done.... Current Process: ",count )
+            if (count <= 0) await redis.set(KEY, 0);
         };
         res.on('finish',dec);
         res.on('close',dec);
