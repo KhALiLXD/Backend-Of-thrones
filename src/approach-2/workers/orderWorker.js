@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { connectDB, sequelize } from '../../shared/config/db.js';
 import Order from '../../shared/modules/orders.js';
+import Product from '../../shared/modules/products.js';
 import { Queue, QUEUES } from '../../shared/utils/queue.js';
 import { setupCluster } from '../../shared/config/cluster.js';
 
@@ -23,6 +24,13 @@ const startOrderWorker = async () => {
             const transaction = await sequelize.transaction();
 
             try {
+                // Decrement product stock in database
+                await Product.decrement('stock', {
+                    by: 1,
+                    where: { id: orderData.productId },
+                    transaction
+                });
+
                 // Save order to database
                 const order = await Order.create({
                     user_id: orderData.userId,
@@ -34,6 +42,7 @@ const startOrderWorker = async () => {
                 await transaction.commit();
 
                 console.log(`[Order Worker ${process.pid}] ✅ Order ${order.id} saved to database`);
+                console.log(`[Order Worker ${process.pid}] 📉 Product ${orderData.productId} stock decremented in database`);
 
                 // Add to payment queue
                 const paymentData = {
