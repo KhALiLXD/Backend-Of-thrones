@@ -98,6 +98,13 @@ const startPaymentWorker = async () => {
                     // Refund stock in Redis
                     await redis.incr(stockKey);
 
+                    // Refund stock in database 
+                    await Product.increment('stock', {
+                        by: 1,
+                        where: { id: paymentData.productId },
+                        transaction
+                    });
+
                     // Update order status to failed
                     await Order.update(
                         { status: 'failed' },
@@ -106,7 +113,7 @@ const startPaymentWorker = async () => {
 
                     await transaction.commit();
 
-                    console.log(`[Payment Worker ${process.pid}] 🔄 Stock refunded for product ${paymentData.productId}`);
+                    console.log(`[Payment Worker ${process.pid}] 🔄 Stock refunded in Redis and database for product ${paymentData.productId}`);
 
                 } catch (err) {
                     await transaction.rollback();
