@@ -11,16 +11,16 @@ const processPayment = async (paymentDetails) => {
 
   await new Promise((resolve) => setTimeout(resolve, 2500));
 
-  const isSuccess = Math.random() > 0.1;
+  // const isSuccess = Math.random() > 0.1;
 
-  if (!isSuccess) {
-    return {
-      success: false,
-      error: "Payment declined by processor",
-      orderId,
-      timestamp: new Date().toISOString(),
-    };
-  }
+  // if (!isSuccess) {
+  //   return {
+  //     success: false,
+  //     error: "Payment declined by processor",
+  //     orderId,
+  //     timestamp: new Date().toISOString(),
+  //   };
+  // }
 
   const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
 

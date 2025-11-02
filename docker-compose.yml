@@ -64,7 +64,7 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      WORKER_CONCURRENCY: "10"
+      WORKER_CONCURRENCY: "6"
       THREADS: "4"                # لو بدك توقيع/تشفير ثقيل
     depends_on:
       postgres: { condition: service_healthy }

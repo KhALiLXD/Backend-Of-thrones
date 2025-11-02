@@ -9,7 +9,16 @@ export const queueLimiterMiddleware = async (req, res, next) => {
         const currentQueueSize = await Queue.length(QUEUES.PAYMENTS);
         
         console.log(`[queue-limiter] Current Queue Size: ${currentQueueSize}/${MAX_QUEUE_SIZE}`);
-
+        const productId = req.body?.productId;
+        if (productId){
+            const stockKey = `${productId}:STOCK`;
+            const stockCache = await redis.get(stockKey);
+            if (stockCache < 1 ) {
+                console.log(`Order Worker ${process.pid}] ❌ Insufficient stock! Current: ${stockCache}`);
+                return res.status(409).json({message: "Out Of stock!"});
+            }
+        }
+        
         // If queue is full, reject the request
         if (currentQueueSize >= MAX_QUEUE_SIZE) {
             res.set("Retry-After", "10");

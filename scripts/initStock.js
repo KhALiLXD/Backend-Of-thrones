@@ -21,7 +21,8 @@ const initStock = async () => {
         let loadedCount = 0;
 
         for (const product of products) {
-            const stockKey = `product:${product.id}:stock`;
+            const stockKey = `${product.id}:STOCK`;
+
             await redis.set(stockKey, product.stock.toString());
 
             const productDataKey = `product:${product.id}:data`;

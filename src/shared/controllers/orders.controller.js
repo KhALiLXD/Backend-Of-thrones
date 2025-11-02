@@ -4,6 +4,7 @@ import { sequelize } from '../config/db.js';
 import processPayment from '../utils/processPayment.js';
 import { redis } from '../config/redis.js';
 import { Queue, QUEUES } from '../utils/queue.js';
+import { getOrderStatusFromCache, initializeOrderStatus } from '../utils/orderTracing.js';
 
 export const getOrder = async (req,res) =>{
     const orderId = req.params.id;
@@ -115,28 +116,38 @@ export const flashBuy = async (req, res) => {
         const { productId } = req.body;
 
         if (!productId) return res.status(400).json({ err: 'product id required' });
+        
         const productDataKey = `product:${productId}:data`;
+        const stockKey = `${productId}:STOCK`;
+        
         let productData = await redis.get(productDataKey);
+        
         if (!productData) {
             const dbProduct = await Product.findByPk(productId);
             if (!dbProduct) return res.status(404).json({ err: 'product not found' });
             productData = dbProduct.toJSON();
-            await redis.set(productDataKey, JSON.stringify(productData), 'EX', 500 );
+            await redis.set(productDataKey, JSON.stringify(productData), 'EX', 500);
             await redis.set(stockKey, String(productData.stock));
         } else {
             productData = JSON.parse(productData);
         }
 
-        if (productData.stock < 1 ) return res.status(409).json({ err: 'product out of stock' });
+        const currentStock = await redis.get(stockKey);
+        if (!currentStock || parseInt(currentStock) < 1) {
+            return res.status(409).json({ err: 'product out of stock' });
+        }
 
-        // const newStock = await redis.decr(stockKey);
+        const orderId = `${Date.now()}${userId}${productId}`;
+        
+        // NEW - Initialize order status tracking
+        await initializeOrderStatus(
+            orderId, 
+            userId, 
+            productId, 
+            productData.price,
+            productData.name
+        );
 
-        // if (newStock < 1) {
-        //     await redis.incr(stockKey);
-        //     return res.status(400).json({ err: 'product out of stock' });
-        // }
-
-        const orderId = `${Date.now()}_${userId}_${productId}`;
         const orderData = {
             orderId,
             userId,
@@ -150,9 +161,9 @@ export const flashBuy = async (req, res) => {
         return res.status(202).json({
             success: true,
             orderId,
-            status: 'processing',
+            status: 'queued',
             message: 'order is being processed',
-            checkStatusUrl: `/order/${orderId}`,
+            checkStatusUrl: `/api/order/${orderId}/status`, // NEW
             product: {
                 id: productId,
                 name: productData.name,
@@ -161,6 +172,59 @@ export const flashBuy = async (req, res) => {
         });
     } catch (err) {
         console.error('Buy Error', err);
-        return res.status(500).json({ error: 'failed to process order' });
+        return res.status(500).json({ 
+            success: false,
+            error: 'failed to process order' 
+        });
     }
 };
+
+export const getOrderStatus = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        console.log(orderId)
+        // Try cache first
+        const cachedStatus = await getOrderStatusFromCache(orderId);
+        console.log("cachedStatus",cachedStatus);
+        if (cachedStatus) {
+            return res.json(cachedStatus);
+        }
+        
+        // Fallback to database
+        const order = await Order.findOne({
+            where: { id: orderId },
+            include: [{
+                model: Product,
+                attributes: ['id', 'name', 'price']
+            }]
+        });
+        
+        if (!order) {
+            return res.status(404).json({ 
+                success: false,
+                error: 'order not found' 
+            });
+        }
+        
+        const statusData = {
+            success: true,
+            orderId: order.id,
+            userId: order.user_id,
+            status: order.status,
+            totalPrice: order.total_price,
+            product: order.Product,
+            createdAt: order.createdAt,
+            updatedAt: order.updatedAt
+        };
+        
+        return res.json(statusData);
+        
+    } catch (err) {
+        console.error('Get Order Status Error:', err);
+        return res.status(500).json({ 
+            success: false,
+            error: 'failed to get order status' 
+        });
+    }
+};
+
