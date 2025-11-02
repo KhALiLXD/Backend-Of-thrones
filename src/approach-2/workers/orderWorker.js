@@ -45,11 +45,7 @@ const startOrderWorker = async () => {
             const transaction = await sequelize.transaction();
 
             try {
-                await Product.decrement('stock', {
-                    by: 1,
-                    where: { id: orderData.productId },
-                    transaction
-                });
+            
 
                 const order = await Order.create({
                     id: orderData.orderId, // Use same ID for tracking
