@@ -9,7 +9,7 @@ import processPayment from '../../shared/utils/processPayment.js';
 import { redis } from '../../shared/config/redis.js';
 import { updateOrderStatus } from '../../shared/utils/orderTracing.js';
 
-const workerCount = process.env.PAYMENT_WORKERS || 10;
+const workerCount = process.env.PAYMENT_WORKERS || 20;
 
 const startPaymentWorker = async () => {
     await connectDB();

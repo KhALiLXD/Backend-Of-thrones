@@ -40,23 +40,20 @@ services:
     cpu_quota: 20000           # 0.2 core
     mem_limit: "256m"
     mem_reservation: "128m"
-
   worker-order:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/workers/orderWorker.js"]
     env_file: .env.docker
     environment:
       SERVICE: worker-order
-      WORKER_CONCURRENCY: "32"     # jobs متزامنة داخل العملية
-      THREADS: "0"                # 0 لو I/O فقط
+      ORDER_WORKERS: "8"           # عدد الـ cluster workers
+      WORKER_CONCURRENCY: "16"     # تقليل شوية
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 80000           # 0.8 core
-    mem_limit: "512m"
-    mem_reservation: "256m"
+    cpus: "2.0"                    # ← بدل cpuset + quota
+    mem_limit: "1g"                # ← زود الذاكرة
+    mem_reservation: "512m"
 
   worker-payment:
     build: { context: ., dockerfile: Dockerfile }
@@ -64,17 +61,16 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      WORKER_CONCURRENCY: "4"
-      THREADS: "4"                # لو بدك توقيع/تشفير ثقيل
+      PAYMENT_WORKERS: "20"        # عدد الـ cluster workers
+      WORKER_CONCURRENCY: "10"     # تقليل شوية
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 80000           # 0.8 core
-    mem_limit: "512m"
-    mem_reservation: "256m"
+    cpus: "3.0"                    # ← أكثر للـ payment لأنه فيه delay
+    mem_limit: "1.5g"              # ← زود الذاكرة
+    mem_reservation: "768m"
 
+    
   redis:
     image: redis:7-alpine
     command: ["redis-server","--appendonly","yes"]

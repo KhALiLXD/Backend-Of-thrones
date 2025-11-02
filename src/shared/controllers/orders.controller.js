@@ -163,7 +163,7 @@ export const flashBuy = async (req, res) => {
             orderId,
             status: 'queued',
             message: 'order is being processed',
-            checkStatusUrl: `/api/order/${orderId}/status`, // NEW
+            checkStatusUrl: `/order/${orderId}/status`, // NEW
             product: {
                 id: productId,
                 name: productData.name,
