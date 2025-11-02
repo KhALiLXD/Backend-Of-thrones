@@ -38,7 +38,7 @@ export const buy = async (req,res) => {
 
         if (product.stock < 1) {
             await transaction.rollback();
-            return res.status(400).json({err: 'product out of stock'})
+            return res.status(409).json({err: 'product out of stock'})
         }
 
         product.stock -= 1;
@@ -127,7 +127,7 @@ export const flashBuy = async (req, res) => {
             productData = JSON.parse(productData);
         }
 
-        if (productData.stock < 1 ) return res.status(400).json({ err: 'product out of stock' });
+        if (productData.stock < 1 ) return res.status(409).json({ err: 'product out of stock' });
 
         // const newStock = await redis.decr(stockKey);
 

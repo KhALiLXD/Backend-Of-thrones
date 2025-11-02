@@ -14,6 +14,12 @@ services:
       interval: 5s
       timeout: 2s
       retries: 30
+    # === CPU & RAM limits (4-core total budget via cgroups) ===
+    cpuset: "0-3"             # استخدم الأنوية 0..3 فقط
+    cpu_period: 100000         # ثابت
+    cpu_quota: 80000           # 0.8 core
+    mem_limit: "512m"
+    mem_reservation: "256m"
 
   sse:
     build: { context: ., dockerfile: Dockerfile }
@@ -29,6 +35,11 @@ services:
       interval: 5s
       timeout: 2s
       retries: 30
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 20000           # 0.2 core
+    mem_limit: "256m"
+    mem_reservation: "128m"
 
   worker-order:
     build: { context: ., dockerfile: Dockerfile }
@@ -36,11 +47,16 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-order
-      WORKER_CONCURRENCY: "2"     # jobs متزامنة داخل العملية
+      WORKER_CONCURRENCY: "32"     # jobs متزامنة داخل العملية
       THREADS: "0"                # 0 لو I/O فقط
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 80000           # 0.8 core
+    mem_limit: "512m"
+    mem_reservation: "256m"
 
   worker-payment:
     build: { context: ., dockerfile: Dockerfile }
@@ -48,11 +64,16 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      WORKER_CONCURRENCY: "2"
+      WORKER_CONCURRENCY: "10"
       THREADS: "4"                # لو بدك توقيع/تشفير ثقيل
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 80000           # 0.8 core
+    mem_limit: "512m"
+    mem_reservation: "256m"
 
   redis:
     image: redis:7-alpine
@@ -62,6 +83,11 @@ services:
       interval: 3s
       timeout: 1s
       retries: 20
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 40000           # 0.4 core
+    mem_limit: "256m"
+    mem_reservation: "128m"
 
   postgres:
     image: postgres:18-alpine
@@ -76,6 +102,12 @@ services:
       interval: 3s
       timeout: 2s
       retries: 30
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 80000           # 0.8 core
+    mem_limit: "1g"
+    mem_reservation: "512m"
+    shm_size: "512m"          # مهم لأداء Postgres
 
   nginx:
     image: nginx:alpine
@@ -84,6 +116,11 @@ services:
     volumes:
       - ./src/loadbalancer/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
+    cpuset: "0-3"
+    cpu_period: 100000
+    cpu_quota: 20000           # 0.2 core
+    mem_limit: "128m"
+    mem_reservation: "64m"
 
 volumes:
   pg-data:

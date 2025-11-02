@@ -2,43 +2,59 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Trend } from 'k6/metrics';
 
-// Metrics
+// ✅ Success Metrics
 const successfulPurchases = new Counter('successful_purchases');
-const failedPurchases = new Counter('failed_purchases');
-const declinePurchases  = new Counter('decline_purchases');
-const outOfStockAttempts = new Counter('out_of_stock_attempts');
-const queueFullErrors = new Counter('queue_full_503');
-const rateLimitedRequests = new Counter('rate_limited');
+
+// 🔴 Expected Failures (طبيعية ومتوقعة)
+const paymentDeclined = new Counter('payment_declined_402');       // فشل من المستخدم
+const outOfStock = new Counter('out_of_stock_409');               // المخزون خلص
+const queueFull = new Counter('queue_full_503');                  // الطابور ممتلئ
+const rateLimited = new Counter('rate_limited_429');              // Rate limiting
+
+// ⚠️ Real Issues (مشاكل حقيقية!)
+const badRequest = new Counter('bad_request_400');                // خطأ في البيانات
+const unauthorized = new Counter('unauthorized_401');             // مشكلة Auth
+const notFound = new Counter('not_found_404');                   // منتج مش موجود
+const timeout = new Counter('timeout_408');                      // بطء في المعالجة
+const serverErrors = new Counter('server_errors_5xx');           // أخطاء السيرفر
+const unknownErrors = new Counter('unknown_errors');             // أخطاء غير معروفة
+
+// 📊 Performance Metrics
 const purchaseLatency = new Trend('purchase_latency');
 
-// Simple configuration - start small
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },
-    { duration: '1m', target: 100 },
-    { duration: '1m', target: 150 },
     { duration: '30s', target: 100 },
+    { duration: '1m', target: 300 },
+    { duration: '2m', target: 500 },
+    { duration: '1m', target: 200 },
     { duration: '30s', target: 0 },
   ],
+  thresholds: {
+    // ⚠️ المشاكل الحقيقية يجب أن تكون أقل من 5%
+    'server_errors_5xx': ['count<100'],
+    'bad_request_400': ['count<50'],
+    'unauthorized_401': ['count<10'],
+    'timeout_408': ['count<50'],
+  }
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_IDS = [4];
+const PRODUCT_IDS = [10];
 const MAX_RETRIES = 3;
 
 let TEST_USERS = [];
 
 export function setup() {
   console.log('\n' + '='.repeat(70));
-  console.log('🐛 DEBUG BLACK FRIDAY TEST');
+  console.log('🚀 BLACK FRIDAY LOAD TEST - DETAILED ANALYSIS');
   console.log('='.repeat(70) + '\n');
 
-  // Create 50 test users
   console.log('Creating test users...');
   for (let i = 0; i < 50; i++) {
     const userData = {
-      name: `DebugUser${i}`,
-      email: `debuguser${i}@test.com`,
+      name: `TestUser${i}`,
+      email: `testuser${i}@test.com`,
       password: 'test123456'
     };
 
@@ -66,8 +82,6 @@ export function setup() {
   }
 
   console.log(`✅ ${TEST_USERS.length} users ready\n`);
-  console.log('='.repeat(70) + '\n');
-
   return { testUsers: TEST_USERS };
 }
 
@@ -80,24 +94,13 @@ export default function(data) {
   const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
   const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
   
-  // Log every 50th VU
   const shouldLog = __VU % 50 === 0;
-  
-  if (shouldLog) {
-    console.log(`\n[VU ${__VU} Iter ${__ITER}] Starting purchase flow for product ${productId}`);
-  }
 
-  // Step 1: Get product
+  // Get product stock
   const productRes = http.get(`${BASE_URL}/products/${productId}`, { timeout: '5s' });
   
-  if (shouldLog) {
-    console.log(`[VU ${__VU}] GET /products/${productId} → ${productRes.status}`);
-  }
-
   if (productRes.status !== 200) {
     if (shouldLog) console.log(`[VU ${__VU}] ❌ Failed to get product`);
-    failedPurchases.add(1);
-    sleep(1);
     return;
   }
 
@@ -106,32 +109,23 @@ export default function(data) {
     product = JSON.parse(productRes.body);
   } catch (e) {
     if (shouldLog) console.log(`[VU ${__VU}] ❌ Failed to parse product`);
-    failedPurchases.add(1);
     return;
   }
 
-  if (shouldLog) {
-    console.log(`[VU ${__VU}] Product ${productId} stock: ${product.stock}`);
-  }
-
   if (product.stock <= 0) {
-    if (shouldLog) console.log(`[VU ${__VU}] ⚠️  Product out of stock`);
-    outOfStockAttempts.add(1);
+    if (shouldLog) console.log(`[VU ${__VU}] ⚠️  Product already out of stock`);
+    outOfStock.add(1);
     return;
   }
 
   sleep(0.3);
 
-  // Step 2: Attempt purchase with retry
+  // Attempt purchase with retry
   let purchaseSuccess = false;
   
   for (let attempt = 1; attempt <= MAX_RETRIES && !purchaseSuccess; attempt++) {
     const idempotencyKey = `${__VU}_${__ITER}_${productId}_${Date.now()}_attempt${attempt}`;
     
-    if (shouldLog) {
-      console.log(`[VU ${__VU}] Attempt ${attempt}/${MAX_RETRIES} - POST /order/buy-flash`);
-    }
-
     const purchasePayload = JSON.stringify({ productId: productId });
     const startTime = Date.now();
 
@@ -150,10 +144,8 @@ export default function(data) {
         }
       );
     } catch (e) {
-      if (shouldLog) {
-        console.log(`[VU ${__VU}] ❌ Request failed: ${e.message}`);
-      }
-      failedPurchases.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] ❌ Request exception: ${e.message}`);
+      unknownErrors.add(1);
       
       if (attempt < MAX_RETRIES) {
         sleep(2 * attempt);
@@ -165,63 +157,94 @@ export default function(data) {
     const duration = Date.now() - startTime;
     purchaseLatency.add(duration);
 
-    if (shouldLog) {
-      console.log(`[VU ${__VU}] Response: ${purchaseRes.status} (${duration}ms)`);
-    }
-
-    // Handle response
-    if (purchaseRes.status === 200 || purchaseRes.status === 201 || purchaseRes.status === 202 ) {
+    // ✅ Success Cases (200, 201, 202)
+    if (purchaseRes.status === 200 || purchaseRes.status === 201 || purchaseRes.status === 202) {
       successfulPurchases.add(1);
       purchaseSuccess = true;
-      if (shouldLog) console.log(`[VU ${__VU}] ✅ SUCCESS!`);
+      if (shouldLog) console.log(`[VU ${__VU}] ✅ SUCCESS (${purchaseRes.status})`);
       return;
     }
+    
+    // 🔴 Expected Failures - طبيعية ومتوقعة
+    else if (purchaseRes.status === 402) {
+      // Payment declined by user (بطاقة مرفوضة/رصيد غير كافي)
+      paymentDeclined.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] 💳 Payment Declined (402) - User Issue`);
+      return; // لا نعيد المحاولة - المشكلة من المستخدم
+    }
+    
+    else if (purchaseRes.status === 409) {
+      // Out of stock (المخزون خلص)
+      outOfStock.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] 📦 Out of Stock (409) - Expected`);
+      return; // لا نعيد المحاولة
+    }
+    
     else if (purchaseRes.status === 503) {
-      queueFullErrors.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] ⏳ Queue full (503)`);
+      // Queue full (الطابور ممتلئ)
+      queueFull.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] ⏳ Queue Full (503) - System Protection`);
       
+      // نعيد المحاولة مع backoff
       if (attempt < MAX_RETRIES) {
         const backoff = 2 * attempt;
-        if (shouldLog) console.log(`[VU ${__VU}] Waiting ${backoff}s before retry...`);
         sleep(backoff);
         continue;
       }
-      failedPurchases.add(1);
       return;
     }
+    
     else if (purchaseRes.status === 429) {
-      rateLimitedRequests.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] 🚦 Rate limited (429)`);
+      // Rate limited
+      rateLimited.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] 🚦 Rate Limited (429) - Protection Active`);
       
       if (attempt < MAX_RETRIES) {
         sleep(3 * attempt);
         continue;
       }
-      failedPurchases.add(1);
       return;
-    }else if (purchaseRes.status === 402){
-      declinePurchases.add(1)
-      if (shouldLog) console.log(`[VU ${__VU}] ❌ Decline Payment (402)`);
-
     }
+    
+    // ⚠️ Real Issues - مشاكل حقيقية تحتاج تحقيق!
     else if (purchaseRes.status === 400) {
-      outOfStockAttempts.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] 📦 Out of stock (400)`);
-      return; // No retry for out of stock
-    }
-    else if (purchaseRes.status === 401) {
-      if (shouldLog) console.log(`[VU ${__VU}] ❌ Unauthorized (401)`);
-      failedPurchases.add(1);
-      return; // No retry for auth error
-    }
-    else {
+      badRequest.add(1);
       if (shouldLog) {
-        console.log(`[VU ${__VU}] ❌ Unexpected status: ${purchaseRes.status}`);
-        if (purchaseRes.body) {
-          console.log(`[VU ${__VU}] Body: ${purchaseRes.body.substring(0, 100)}`);
-        }
+        console.log(`[VU ${__VU}] ⚠️  BAD REQUEST (400) - INVESTIGATE!`);
+        console.log(`Body: ${purchaseRes.body}`);
       }
-      failedPurchases.add(1);
+      return;
+    }
+    
+    else if (purchaseRes.status === 401) {
+      unauthorized.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  UNAUTHORIZED (401) - AUTH ISSUE!`);
+      return;
+    }
+    
+    else if (purchaseRes.status === 404) {
+      notFound.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  NOT FOUND (404) - PRODUCT MISSING!`);
+      return;
+    }
+    
+    else if (purchaseRes.status === 408) {
+      timeout.add(1);
+      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  TIMEOUT (408) - PERFORMANCE ISSUE!`);
+      
+      if (attempt < MAX_RETRIES) {
+        sleep(3 * attempt);
+        continue;
+      }
+      return;
+    }
+    
+    else if (purchaseRes.status >= 500 && purchaseRes.status < 600) {
+      serverErrors.add(1);
+      if (shouldLog) {
+        console.log(`[VU ${__VU}] 🚨 SERVER ERROR (${purchaseRes.status}) - CRITICAL!`);
+        console.log(`Body: ${purchaseRes.body ? purchaseRes.body.substring(0, 200) : 'empty'}`);
+      }
       
       if (attempt < MAX_RETRIES) {
         sleep(2 * attempt);
@@ -229,24 +252,43 @@ export default function(data) {
       }
       return;
     }
-  }
-
-  // If we reach here, all retries failed
-  if (!purchaseSuccess) {
-    failedPurchases.add(1);
-    if (shouldLog) console.log(`[VU ${__VU}] ❌ All retries exhausted`);
+    
+    else {
+      unknownErrors.add(1);
+      if (shouldLog) {
+        console.log(`[VU ${__VU}] ❓ UNKNOWN STATUS: ${purchaseRes.status}`);
+        console.log(`Body: ${purchaseRes.body ? purchaseRes.body.substring(0, 200) : 'empty'}`);
+      }
+      return;
+    }
   }
 }
 
 export function teardown(data) {
   console.log('\n' + '='.repeat(70));
-  console.log('🐛 DEBUG TEST COMPLETED');
+  console.log('📊 TEST RESULTS ANALYSIS');
   console.log('='.repeat(70));
-  console.log('\nCheck metrics above for:');
-  console.log('  • successful_purchases');
-  console.log('  • failed_purchases');
-  console.log('  • queue_full_503');
-  console.log('  • rate_limited');
-  console.log('  • out_of_stock_attempts');
+  
+  console.log('\n✅ SUCCESS:');
+  console.log('  • successful_purchases - الطلبات الناجحة');
+  
+  console.log('\n🔴 EXPECTED FAILURES (طبيعية):');
+  console.log('  • payment_declined_402 - فشل دفع من المستخدم (محاكاة)');
+  console.log('  • out_of_stock_409 - المخزون خلص (طبيعي)');
+  console.log('  • queue_full_503 - الطابور ممتلئ (حماية)');
+  console.log('  • rate_limited_429 - Rate limiting (حماية)');
+  
+  console.log('\n⚠️  REAL ISSUES (يجب التحقيق!):');
+  console.log('  • bad_request_400 - خطأ في البيانات');
+  console.log('  • unauthorized_401 - مشكلة Authentication');
+  console.log('  • not_found_404 - منتج مش موجود');
+  console.log('  • timeout_408 - بطء في المعالجة');
+  console.log('  • server_errors_5xx - أخطاء السيرفر الحقيقية');
+  console.log('  • unknown_errors - أخطاء غير معروفة');
+  
+  console.log('\n💡 TIP:');
+  console.log('  ركز على الـ Real Issues - هذي المشاكل الحقيقية!');
+  console.log('  Expected Failures طبيعية في Flash Sales');
+  
   console.log('\n' + '='.repeat(70) + '\n');
 }

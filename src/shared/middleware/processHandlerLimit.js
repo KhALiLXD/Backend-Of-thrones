@@ -1,7 +1,7 @@
 import { redis } from "../config/redis.js";
 import { Queue, QUEUES } from "../utils/queue.js";
 
-const MAX_QUEUE_SIZE = 300;
+const MAX_QUEUE_SIZE = 500;
 
 export const queueLimiterMiddleware = async (req, res, next) => {
     try {
