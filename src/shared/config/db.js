@@ -9,7 +9,22 @@ export const sequelize = new Sequelize(
     host: process.env.DB_HOST,
     port: Number(process.env.DB_PORT || 5432),
     dialect: 'postgres',
-    logging: false, 
+    logging: false,
+    pool: {
+      max: Number(process.env.DB_POOL_MAX || 30),   
+      min: Number(process.env.DB_POOL_MIN || 5),
+      acquire: 10000,     
+      idle: 10000,        
+      evict: 1000,        
+    },
+    dialectOptions: {
+      application_name: 'flashsale-api',
+      statement_timeout: 5000,                  
+      idle_in_transaction_session_timeout: 5000, 
+    },
+    retry: {
+      max: 3,          
+    },
   }
 );
 

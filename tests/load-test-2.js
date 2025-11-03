@@ -59,7 +59,7 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_IDS = [58];
+const PRODUCT_IDS = [104];
 const MAX_RETRIES = 3;
 const MAX_STATUS_CHECKS = 60; // 30 محاولة × 500ms = 15 ثانية max
 const STATUS_CHECK_INTERVAL = 0.5; // نص ثانية
