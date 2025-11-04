@@ -14,12 +14,11 @@ services:
       interval: 5s
       timeout: 2s
       retries: 30
-    # === CPU & RAM limits (4-core total budget via cgroups) ===
-    cpuset: "0-3"             # استخدم الأنوية 0..3 فقط
-    cpu_period: 100000         # ثابت
-    cpu_quota: 80000           # 0.8 core
-    mem_limit: "512m"
-    mem_reservation: "256m"
+    cpuset: "0-3"             
+    cpu_period: 100000        
+    cpu_quota: 200000          
+    mem_limit: "1g"
+    mem_reservation: "512m"
 
   sse:
     build: { context: ., dockerfile: Dockerfile }
@@ -37,7 +36,7 @@ services:
       retries: 30
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 20000           # 0.2 core
+    cpu_quota: 20000           
     mem_limit: "256m"
     mem_reservation: "128m"
   worker-order:
@@ -46,13 +45,13 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-order
-      ORDER_WORKERS: "8"           # عدد الـ cluster workers
-      WORKER_CONCURRENCY: "16"     # تقليل شوية
+      ORDER_WORKERS: "6"           
+      WORKER_CONCURRENCY: "12"     
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpus: "2.0"                    # ← بدل cpuset + quota
-    mem_limit: "1g"                # ← زود الذاكرة
+    cpus: "2.0"                    
+    mem_limit: "1g"                
     mem_reservation: "512m"
 
   worker-payment:
@@ -61,13 +60,13 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      PAYMENT_WORKERS: "20"        # عدد الـ cluster workers
-      WORKER_CONCURRENCY: "10"     # تقليل شوية
+      PAYMENT_WORKERS: "20"      
+      WORKER_CONCURRENCY: "10"     
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpus: "3.0"                    # ← أكثر للـ payment لأنه فيه delay
-    mem_limit: "1.5g"              # ← زود الذاكرة
+    cpus: "3.0"                   
+    mem_limit: "1.5g"             
     mem_reservation: "768m"
 
     
@@ -100,10 +99,10 @@ services:
       retries: 30
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 80000           # 0.8 core
-    mem_limit: "1g"
-    mem_reservation: "512m"
-    shm_size: "512m"          # مهم لأداء Postgres
+    cpu_quota: 200000           # 2 core
+    mem_limit: "2g"
+    mem_reservation: "1g"
+    shm_size: "1g"          # مهم لأداء Postgres
 
   nginx:
     image: nginx:alpine
@@ -114,8 +113,8 @@ services:
     restart: unless-stopped
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 20000           # 0.2 core
-    mem_limit: "128m"
+    cpu_quota: 40000           # 0.2 core
+    mem_limit: "256m"
     mem_reservation: "64m"
 
 volumes:

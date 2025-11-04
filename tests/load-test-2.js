@@ -42,10 +42,10 @@ const orderSuccessRate = new Rate('order_success_rate');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },   // ← قللنا العدد
-    { duration: '1m', target: 150 },   // ← قللنا العدد
-    { duration: '2m', target: 300 },   // ← قللنا العدد
-    { duration: '1m', target: 100 },   // ← قللنا العدد
+    { duration: '30s', target: 50 },   
+    { duration: '1m', target: 150 }, 
+    { duration: '2m', target: 300 },   
+    { duration: '1m', target: 100 },  
     { duration: '30s', target: 0 },
   ],
   thresholds: {
@@ -53,13 +53,13 @@ export const options = {
     'bad_request_400': ['count<50'],
     'unauthorized_401': ['count<10'],
     'timeout_408': ['count<50'],
-    'order_success_rate': ['rate>0.85'], // ← رفعنا التوقع لـ 85%
+    'order_success_rate': ['rate>0.85'], 
     'total_order_time': ['p(95)<15000'],
   }
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_IDS = [104];
+const PRODUCT_IDS = [143];
 const MAX_RETRIES = 3;
 const MAX_STATUS_CHECKS = 60; // 30 محاولة × 500ms = 15 ثانية max
 const STATUS_CHECK_INTERVAL = 0.5; // نص ثانية
@@ -139,12 +139,10 @@ function trackOrderStatus(orderId, userToken, shouldLog) {
         const data = JSON.parse(statusRes.body);
         currentStatus = data.status;
         
-        // تسجيل التوقيت عند أول دخول لكل حالة
         if (currentStatus !== lastStatus && statusTimings.hasOwnProperty(currentStatus)) {
           statusTimings[currentStatus] = Date.now() - startTime;
           lastStatus = currentStatus;
           
-          // Track status metrics
           switch(currentStatus) {
             case 'queued': ordersQueued.add(1); break;
             case 'processing': ordersProcessing.add(1); break;
@@ -157,12 +155,10 @@ function trackOrderStatus(orderId, userToken, shouldLog) {
           }
         }
 
-        // إذا وصل لحالة نهائية، وقف
         if (currentStatus === 'confirmed') {
           const totalTime = Date.now() - startTime;
           totalOrderTime.add(totalTime);
           
-          // حساب وقت كل مرحلة
           if (statusTimings.processing && statusTimings.queued) {
             orderProcessingTime.add(statusTimings.processing - statusTimings.queued);
           }
@@ -195,7 +191,6 @@ function trackOrderStatus(orderId, userToken, shouldLog) {
         }
 
       } else if (statusRes.status === 404) {
-        // الطلب مش موجود بالـ cache ولا بالـ database
         if (shouldLog) console.log(`[Order ${orderId}] ❌ NOT FOUND (404)`);
         return { success: false, status: 'not_found', error: 'order not found' };
       }
@@ -205,7 +200,6 @@ function trackOrderStatus(orderId, userToken, shouldLog) {
     }
   }
 
-  // Timeout - الطلب أخذ وقت أكثر من اللازم
   const totalTime = Date.now() - startTime;
   ordersTimeout.add(1);
   orderSuccessRate.add(0);
@@ -227,9 +221,8 @@ export default function(data) {
   const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
   const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
   
-  const shouldLog = __VU % 100 === 0; // Log كل 100 VU
+  const shouldLog = __VU % 100 === 0;
 
-  // Get product stock
   const productRes = http.get(`${BASE_URL}/products/${productId}`, { timeout: '5s' });
   
   if (productRes.status !== 200) {
@@ -257,7 +250,6 @@ export default function(data) {
   let purchaseSuccess = false;
   let orderId = null;
   
-  // حدد الـ endpoint بناءً على الـ config
   const endpoint = USE_FLASH_BUY ? `${BASE_URL}/order/buy-flash` : `${BASE_URL}/order/buy`;
   
   for (let attempt = 1; attempt <= MAX_RETRIES && !purchaseSuccess; attempt++) {
@@ -291,7 +283,6 @@ export default function(data) {
     const duration = Date.now() - startTime;
     purchaseLatency.add(duration);
 
-    // ✅ Success Cases (202 for flash-buy, 200/201 for regular buy)
     if (purchaseRes.status === 202 || purchaseRes.status === 200 || purchaseRes.status === 201) {
       successfulPurchases.add(1);
       purchaseSuccess = true;
@@ -318,7 +309,6 @@ export default function(data) {
             }
           }
         } else if (USE_FLASH_BUY) {
-          // لو flash-buy ومافيش orderId، في مشكلة
           if (shouldLog) console.log(`[VU ${__VU}] ⚠️  No orderId returned from flash-buy!`);
         } else {
           // لو buy عادي، معناه خلص مباشرة
@@ -334,7 +324,6 @@ export default function(data) {
       return;
     }
     
-    // 🔴 Expected Failures
     else if (purchaseRes.status === 402) {
       paymentDeclined.add(1);
       if (shouldLog) console.log(`[VU ${__VU}] 💳 Payment Declined (402)`);
@@ -369,7 +358,6 @@ export default function(data) {
       return;
     }
     
-    // ⚠️ Real Issues
     else if (purchaseRes.status === 400) {
       badRequest.add(1);
       if (shouldLog) {

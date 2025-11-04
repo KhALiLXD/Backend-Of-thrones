@@ -11,7 +11,6 @@ import { updateOrderStatus } from '../../shared/utils/orderTracing.js';
 const workerCount = process.env.PAYMENT_WORKERS || 3;
 const concurrency = process.env.WORKER_CONCURRENCY || 10;
 
-// 🔥 دالة معالجة الدفعة الواحدة
 const processPaymentJob = async () => {
     try {
         const paymentData = await Queue.pop(QUEUES.PAYMENTS, 2);
@@ -174,19 +173,16 @@ const processPaymentJob = async () => {
     }
 };
 
-// 🚀 Worker الرئيسي مع Concurrency
 const startPaymentWorker = async () => {
     await connectDB();
     console.log(`💳 Payment Worker ${process.pid} started with ${concurrency} concurrent jobs`);
 
-    // إنشاء عدة promises تشتغل بالتوازي
     const workers = Array(concurrency).fill(null).map(async () => {
         while (true) {
             await processPaymentJob();
         }
     });
 
-    // انتظار جميع الworkers (مش هيخلصوا أبداً)
     await Promise.all(workers);
 };
 

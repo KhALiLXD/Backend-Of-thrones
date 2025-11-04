@@ -8,13 +8,13 @@
   "scripts": {
     "start1": "node ./src/approach-1/index.js",
     "dev1": "cross-env NODE_ENV=development nodemon ./src/approach-1/index.js",
-    "start-2": "node ./src/approach-2/index.api.js",
     "dev2": "cross-env NODE_ENV=development nodemon ./src/approach-2/index.api.js",
     "insert-product": "node ./scripts/insertProduct.js",
     "init-stock": "node ./scripts/initStock.js",
     "worker:orders": "node ./src/approach-2/workers/orderWorker.js",
     "worker:payments": "node ./src/approach-2/workers/paymentWorker.js",
-    "start2": "node ./src/loadBalancer.js"
+    "start2": "docker compose up --scale api=3 --scale sse=2 -d",
+    "test2": "k6 run ./tests/load-test-2.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
