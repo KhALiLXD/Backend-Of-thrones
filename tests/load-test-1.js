@@ -11,7 +11,6 @@ const queueFullErrors = new Counter('queue_full_503');
 const rateLimitedRequests = new Counter('rate_limited');
 const purchaseLatency = new Trend('purchase_latency');
 
-// Simple configuration - start small
 export const options = {
   stages: [
     { duration: '30s', target: 50 },
@@ -33,7 +32,6 @@ export function setup() {
   console.log('🐛 DEBUG BLACK FRIDAY TEST');
   console.log('='.repeat(70) + '\n');
 
-  // Create 50 test users
   console.log('Creating test users...');
   for (let i = 0; i < 50; i++) {
     const userData = {
@@ -80,14 +78,12 @@ export default function(data) {
   const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
   const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
   
-  // Log every 50th VU
   const shouldLog = __VU % 50 === 0;
   
   if (shouldLog) {
     console.log(`\n[VU ${__VU} Iter ${__ITER}] Starting purchase flow for product ${productId}`);
   }
 
-  // Step 1: Get product
   const productRes = http.get(`${BASE_URL}/products/${productId}`, { timeout: '5s' });
   
   if (shouldLog) {
@@ -122,7 +118,6 @@ export default function(data) {
 
   sleep(0.3);
 
-  // Step 2: Attempt purchase with retry
   let purchaseSuccess = false;
   
   for (let attempt = 1; attempt <= MAX_RETRIES && !purchaseSuccess; attempt++) {
@@ -169,7 +164,6 @@ export default function(data) {
       console.log(`[VU ${__VU}] Response: ${purchaseRes.status} (${duration}ms)`);
     }
 
-    // Handle response
     if (purchaseRes.status === 200 || purchaseRes.status === 201) {
       successfulPurchases.add(1);
       purchaseSuccess = true;
@@ -207,12 +201,12 @@ export default function(data) {
     else if (purchaseRes.status === 400) {
       outOfStockAttempts.add(1);
       if (shouldLog) console.log(`[VU ${__VU}] 📦 Out of stock (400)`);
-      return; // No retry for out of stock
+      return; 
     }
     else if (purchaseRes.status === 401) {
       if (shouldLog) console.log(`[VU ${__VU}] ❌ Unauthorized (401)`);
       failedPurchases.add(1);
-      return; // No retry for auth error
+      return; 
     }
     else {
       if (shouldLog) {
@@ -231,7 +225,6 @@ export default function(data) {
     }
   }
 
-  // If we reach here, all retries failed
   if (!purchaseSuccess) {
     failedPurchases.add(1);
     if (shouldLog) console.log(`[VU ${__VU}] ❌ All retries exhausted`);

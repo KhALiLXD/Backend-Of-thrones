@@ -1,6 +1,5 @@
 
 import { redis } from "../config/redis.js";
-// Update order status in Redis
 export const updateOrderStatus = async (orderId, status, additionalData = {}) => {
     try {
         const cacheKey = `order:${orderId}:status`;
@@ -16,7 +15,6 @@ export const updateOrderStatus = async (orderId, status, additionalData = {}) =>
             ...additionalData
         };
         
-        // Cache for 10 minutes
         await redis.set(cacheKey, JSON.stringify(orderData), 'EX', 600);
         
         console.log(`[Status Tracker] Order ${orderId} → ${status}`);
@@ -26,7 +24,6 @@ export const updateOrderStatus = async (orderId, status, additionalData = {}) =>
     }
 };
 
-// Get order status from Redis
 export const getOrderStatusFromCache = async (orderId) => {
     try {
         const cacheKey = `order:${orderId}:status`;
@@ -38,7 +35,6 @@ export const getOrderStatusFromCache = async (orderId) => {
     }
 };
 
-// Initialize order status
 export const initializeOrderStatus = async (orderId, userId, productId, price, productName) => {
     await updateOrderStatus(orderId, 'queued', {
         userId,

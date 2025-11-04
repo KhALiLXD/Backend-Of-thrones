@@ -139,7 +139,6 @@ export const flashBuy = async (req, res) => {
 
         const orderId = `${Date.now()}${userId}${productId}`;
         
-        // NEW - Initialize order status tracking
         await initializeOrderStatus(
             orderId, 
             userId, 
@@ -183,14 +182,13 @@ export const getOrderStatus = async (req, res) => {
     try {
         const { orderId } = req.params;
         console.log(orderId)
-        // Try cache first
+
         const cachedStatus = await getOrderStatusFromCache(orderId);
         console.log("cachedStatus",cachedStatus);
         if (cachedStatus) {
             return res.json(cachedStatus);
         }
         
-        // Fallback to database
         const order = await Order.findOne({
             where: { id: orderId },
             include: [{

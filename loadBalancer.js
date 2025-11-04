@@ -1,4 +1,3 @@
-// src/approach-2/loadbalancer.js
 import cluster from 'cluster';
 import os from 'os';
 import path from 'path';

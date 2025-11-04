@@ -80,16 +80,13 @@ services:
       retries: 20
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 40000           # 0.4 core
+    cpu_quota: 40000          
     mem_limit: "256m"
     mem_reservation: "128m"
 
   postgres:
     image: postgres:18-alpine
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: "1"
-      POSTGRES_DB: flashsale_dev
+    env_file: .env.docker
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
@@ -99,10 +96,10 @@ services:
       retries: 30
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 200000           # 2 core
+    cpu_quota: 200000           
     mem_limit: "2g"
     mem_reservation: "1g"
-    shm_size: "1g"          # مهم لأداء Postgres
+    shm_size: "1g"          
 
   nginx:
     image: nginx:alpine
@@ -113,7 +110,7 @@ services:
     restart: unless-stopped
     cpuset: "0-3"
     cpu_period: 100000
-    cpu_quota: 40000           # 0.2 core
+    cpu_quota: 40000          
     mem_limit: "256m"
     mem_reservation: "64m"
 

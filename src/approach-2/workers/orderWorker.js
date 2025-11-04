@@ -10,13 +10,12 @@ import { updateOrderStatus } from '../../shared/utils/orderTracing.js';
 const workerCount = process.env.ORDER_WORKERS || 3;
 const concurrency = process.env.WORKER_CONCURRENCY || 15;
 
-// 🔥 دالة معالجة الطلب الواحد
 const processOrderJob = async () => {
     try {
         const orderData = await Queue.pop(QUEUES.ORDERS, 5);
 
         if (!orderData) {
-            await new Promise(resolve => setTimeout(resolve, 100)); // انتظار قصير
+            await new Promise(resolve => setTimeout(resolve, 100)); 
             return;
         }
         
@@ -85,19 +84,16 @@ const processOrderJob = async () => {
     }
 };
 
-// 🚀 Worker الرئيسي مع Concurrency
 const startOrderWorker = async () => {
     await connectDB();
     console.log(`📦 Order Worker ${process.pid} started with ${concurrency} concurrent jobs`);
 
-    // إنشاء عدة promises تشتغل بالتوازي
     const workers = Array(concurrency).fill(null).map(async () => {
         while (true) {
             await processOrderJob();
         }
     });
 
-    // انتظار جميع الworkers (مش هيخلصوا أبداً)
     await Promise.all(workers);
 };
 

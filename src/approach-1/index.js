@@ -22,7 +22,7 @@ const port = 3000;
 let connections = 0;
 app.use(express.json())
 app.use(express.static('public'));
-// app.use(apiRateLimiter);
+// app.use(apiRateLimiter); // for testing
 app.set("trust proxy", 1);
 app.use((req, res, next) => {
   connections++;

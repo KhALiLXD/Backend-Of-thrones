@@ -30,7 +30,6 @@ export const idempotency  = async (req,res,next) => {
         }
     }
 
-    // Make new key status as "PENDING"
     await redis.set(
         key,
         JSON.stringify({ status: 'PENDING' }),

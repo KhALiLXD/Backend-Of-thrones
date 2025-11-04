@@ -2,17 +2,14 @@ import http from 'k6/http';
 import { check, sleep } from 'k6';
 import { Counter, Trend, Rate } from 'k6/metrics';
 
-// ✅ Success Metrics
 const successfulPurchases = new Counter('successful_purchases');
 const fullyConfirmedOrders = new Counter('fully_confirmed_orders');
 
-// 🔴 Expected Failures (طبيعية ومتوقعة)
 const paymentDeclined = new Counter('payment_declined_402');
 const outOfStock = new Counter('out_of_stock_409');
 const queueFull = new Counter('queue_full_503');
 const rateLimited = new Counter('rate_limited_429');
 
-// ⚠️ Real Issues (مشاكل حقيقية!)
 const badRequest = new Counter('bad_request_400');
 const unauthorized = new Counter('unauthorized_401');
 const notFound = new Counter('not_found_404');
@@ -20,13 +17,11 @@ const timeout = new Counter('timeout_408');
 const serverErrors = new Counter('server_errors_5xx');
 const unknownErrors = new Counter('unknown_errors');
 
-// 📊 Performance Metrics
 const purchaseLatency = new Trend('purchase_latency');
 const orderProcessingTime = new Trend('order_processing_time');
 const paymentProcessingTime = new Trend('payment_processing_time');
 const totalOrderTime = new Trend('total_order_time');
 
-// 📈 Order Status Tracking
 const ordersQueued = new Counter('orders_queued');
 const ordersProcessing = new Counter('orders_processing');
 const ordersPending = new Counter('orders_pending');
@@ -37,7 +32,6 @@ const ordersFailed = new Counter('orders_failed');
 const ordersPaymentFailed = new Counter('orders_payment_failed');
 const ordersTimeout = new Counter('orders_timeout');
 
-// Success Rate
 const orderSuccessRate = new Rate('order_success_rate');
 
 export const options = {
@@ -61,8 +55,8 @@ export const options = {
 const BASE_URL = 'http://localhost/api';
 const PRODUCT_IDS = [143];
 const MAX_RETRIES = 3;
-const MAX_STATUS_CHECKS = 60; // 30 محاولة × 500ms = 15 ثانية max
-const STATUS_CHECK_INTERVAL = 0.5; // نص ثانية
+const MAX_STATUS_CHECKS = 60;
+const STATUS_CHECK_INTERVAL = 0.5; 
 const USE_FLASH_BUY=true
 let TEST_USERS = [];
 
@@ -246,7 +240,6 @@ export default function(data) {
 
   sleep(0.3);
 
-  // Attempt purchase with retry
   let purchaseSuccess = false;
   let orderId = null;
   
@@ -299,7 +292,6 @@ export default function(data) {
           }
         }
         
-        // تتبع الطلب فقط لو في orderId أو status URL
         if (orderId) {
           const trackingResult = trackOrderStatus(orderId, userToken, shouldLog);
           
@@ -311,7 +303,6 @@ export default function(data) {
         } else if (USE_FLASH_BUY) {
           if (shouldLog) console.log(`[VU ${__VU}] ⚠️  No orderId returned from flash-buy!`);
         } else {
-          // لو buy عادي، معناه خلص مباشرة
           fullyConfirmedOrders.add(1);
           orderSuccessRate.add(1);
           if (shouldLog) console.log(`[VU ${__VU}] ✅ Regular buy completed immediately`);

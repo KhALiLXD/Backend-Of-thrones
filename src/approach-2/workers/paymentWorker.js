@@ -16,7 +16,7 @@ const processPaymentJob = async () => {
         const paymentData = await Queue.pop(QUEUES.PAYMENTS, 2);
 
         if (!paymentData) {
-            await new Promise(resolve => setTimeout(resolve, 100)); // انتظار قصير
+            await new Promise(resolve => setTimeout(resolve, 100)); 
             return;
         }
 
