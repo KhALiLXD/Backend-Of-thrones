@@ -90,7 +90,7 @@ services:
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U postgres -d flashsale_dev -h localhost -p 5432"]
+      test: ["CMD-SHELL","pg_isready -U postgres -d flashsale -h localhost -p 5432"]    # change here with your db name
       interval: 3s
       timeout: 2s
       retries: 30
@@ -116,3 +116,4 @@ services:
 
 volumes:
   pg-data:
+

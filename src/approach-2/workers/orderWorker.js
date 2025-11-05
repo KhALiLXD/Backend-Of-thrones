@@ -15,24 +15,15 @@ const processOrderJob = async () => {
         const orderData = await Queue.pop(QUEUES.ORDERS, 5);
 
         if (!orderData) {
-            await new Promise(resolve => setTimeout(resolve, 100)); 
+            await new Promise(resolve => setTimeout(resolve, 100));
             return;
         }
-        
-        const stockKey = `${orderData.productId}:STOCK`;
-        const stockCache = await redis.get(stockKey);
-        
-        if (stockCache < 1) {
-            console.log(`[Order Worker ${process.pid}] ❌ Insufficient stock! Current: ${stockCache}`);
-            
-            await updateOrderStatus(orderData.orderId, 'failed', {
-                error: 'insufficient stock',
-                failedAt: new Date().toISOString()
-            });
-            
-            return;
-        }
-        
+
+        // CRITICAL FIX: Do NOT check stock here!
+        // The API already atomically reserved stock with redis.decr()
+        // If order is in queue, stock is already reserved for it 
+        // Checking stock here causes false rejections because stock is already decremented
+
         await updateOrderStatus(orderData.orderId, 'processing');
         
         console.log(`[Order Worker ${process.pid}] Processing order:`, orderData);

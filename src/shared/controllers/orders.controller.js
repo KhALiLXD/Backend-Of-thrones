@@ -132,11 +132,18 @@ export const flashBuy = async (req, res) => {
             productData = JSON.parse(productData);
         }
 
-        const currentStock = await redis.get(stockKey);
-        if (!currentStock || parseInt(currentStock) < 1) {
+        // CRITICAL FIX: Atomic decrement prevents race condition
+        // Instead of checking then queueing (race condition), we atomically decrement
+        const newStock = await redis.decr(stockKey);
+
+        // If stock went negative, we're out of stock
+        if (newStock < 0) {
+            // Rollback the decrement
+            await redis.incr(stockKey);
             return res.status(409).json({ err: 'product out of stock' });
         }
 
+        // Stock is RESERVED! Proceed with order
         const orderId = `${Date.now()}${userId}${productId}`;
         
         await initializeOrderStatus(
@@ -225,4 +232,3 @@ export const getOrderStatus = async (req, res) => {
         });
     }
 };
-
