@@ -7,7 +7,7 @@ import { setupCluster } from '../../shared/config/cluster.js';
 import { redis } from '../../shared/config/redis.js';
 import { updateOrderStatus } from '../../shared/utils/orderTracing.js';
 
-const workerCount = process.env.ORDER_WORKERS || 3;
+const workerCount = process.env.ORDER_WORKERS || 4;
 const concurrency = process.env.WORKER_CONCURRENCY || 15;
 
 const processOrderJob = async () => {

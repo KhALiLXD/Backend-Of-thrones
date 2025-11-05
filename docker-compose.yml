@@ -1,25 +1,33 @@
 services:
+  # ============================================
+  # API SERVICE - Hybrid Scaling
+  # 2 containers × 2 workers = 4 total workers
+  # ============================================
   api:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.api.js"]
     env_file: .env.docker
     environment:
       SERVICE: api
+      API_WORKERS: "2"           # 2 Node.js cluster workers per container (vertical)
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
     expose: ["3000"]
+    volumes:
+      - ./scripts:/app/scripts:ro
     healthcheck:
       test: ["CMD-SHELL","curl -sf http://localhost:3000/health || exit 1"]
       interval: 5s
       timeout: 2s
       retries: 30
-    cpuset: "0-3"             
-    cpu_period: 100000        
-    cpu_quota: 200000          
-    mem_limit: "1g"
+    cpus: "2.0"                  # 2 CPUs per container
+    mem_limit: "768m"
     mem_reservation: "512m"
 
+  # ============================================
+  # SSE SERVICE - Server-Sent Events
+  # ============================================
   sse:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/index.sse.js"]
@@ -34,73 +42,86 @@ services:
       interval: 5s
       timeout: 2s
       retries: 30
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 20000           
+    cpus: "1.0"
     mem_limit: "256m"
     mem_reservation: "128m"
+
+  # ============================================
+  # ORDER WORKER - Processes order queue
+  # 1 container × 4 workers × 15 = 60 capacity
+  # ============================================
   worker-order:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/workers/orderWorker.js"]
     env_file: .env.docker
     environment:
       SERVICE: worker-order
-      ORDER_WORKERS: "6"           
-      WORKER_CONCURRENCY: "12"     
+      ORDER_WORKERS: "4"           # 4 workers (vertical)
+      WORKER_CONCURRENCY: "15"     # 15 concurrent per worker
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpus: "2.0"                    
-    mem_limit: "1g"                
+    cpus: "2.0"
+    mem_limit: "1g"
     mem_reservation: "512m"
 
+  # ============================================
+  # PAYMENT WORKER - HORIZONTAL SCALING
+  # 6 containers × 6 workers × 20 = 720 capacity
+  # ============================================
   worker-payment:
     build: { context: ., dockerfile: Dockerfile }
     command: ["node","src/approach-2/workers/paymentWorker.js"]
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      PAYMENT_WORKERS: "20"      
-      WORKER_CONCURRENCY: "10"     
+      PAYMENT_WORKERS: "6"         # 6 workers per container (vertical)
+      WORKER_CONCURRENCY: "20"     # 20 concurrent per worker
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
-    cpus: "3.0"                   
-    mem_limit: "1.5g"             
-    mem_reservation: "768m"
+    cpus: "2.0"                    # 2 CPUs per container
+    mem_limit: "768m"
+    mem_reservation: "512m"
 
-    
+  # ============================================
+  # REDIS - Cache + Queue
+  # ============================================
   redis:
     image: redis:7-alpine
     command: ["redis-server","--appendonly","yes"]
+    ports: ["6379:6379"]
     healthcheck:
       test: ["CMD","redis-cli","ping"]
       interval: 3s
       timeout: 1s
       retries: 20
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 40000          
+    cpus: "1.0"
     mem_limit: "256m"
     mem_reservation: "128m"
 
+  # ============================================
+  # POSTGRESQL - Database
+  # ============================================
   postgres:
     image: postgres:18-alpine
     env_file: .env.docker
+    ports: ["5432:5432"]
     volumes:
       - pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL","pg_isready -U postgres -d flashsale -h localhost -p 5432"]    # change here with your db name
+      test: ["CMD-SHELL","pg_isready -U postgres -d flashsale -h localhost -p 5432"]
       interval: 3s
       timeout: 2s
       retries: 30
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 200000           
+    cpus: "2.0"
     mem_limit: "2g"
     mem_reservation: "1g"
-    shm_size: "1g"          
+    shm_size: "1g"
 
+  # ============================================
+  # NGINX - Load Balancer
+  # ============================================
   nginx:
     image: nginx:alpine
     depends_on: [api, sse]
@@ -108,12 +129,9 @@ services:
     volumes:
       - ./src/loadbalancer/nginx.conf:/etc/nginx/nginx.conf:ro
     restart: unless-stopped
-    cpuset: "0-3"
-    cpu_period: 100000
-    cpu_quota: 40000          
+    cpus: "1.0"
     mem_limit: "256m"
     mem_reservation: "64m"
 
 volumes:
   pg-data:
-
