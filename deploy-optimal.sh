@@ -6,7 +6,7 @@ echo "================================================================"
 echo ""
 echo "Configuration:"
 echo "  - API: 2 containers × 2 workers = 4 workers"
-echo "  - Payment: 6 containers × 6 workers × 20 = 720 capacity"
+echo "  - Payment: 8 containers × 8 workers × 20 = 1280 capacity"
 echo "  - Order: 1 container × 4 workers × 15 = 60 capacity"
 echo ""
 echo "================================================================"
@@ -26,7 +26,7 @@ echo ""
 
 # Step 3: Start services with scaling
 echo "3️⃣  Starting services with horizontal scaling..."
-docker compose up -d --scale api=2 --scale worker-payment=6
+docker compose up -d --scale api=2 --scale worker-payment=8
 echo "   ✅ Started"
 echo ""
 
@@ -70,10 +70,10 @@ echo ""
 echo "7️⃣  Verifying payment worker scaling..."
 PAYMENT_CONTAINERS=$(docker compose ps worker-payment --format json 2>/dev/null | wc -l)
 echo "   📦 Payment worker containers: $PAYMENT_CONTAINERS"
-if [ "$PAYMENT_CONTAINERS" -ge 6 ]; then
-  echo "   ✅ 6 payment containers running"
+if [ "$PAYMENT_CONTAINERS" -ge 8 ]; then
+  echo "   ✅ 8 payment containers running"
 else
-  echo "   ⚠️  Expected 6 containers, found $PAYMENT_CONTAINERS"
+  echo "   ⚠️  Expected 8 containers, found $PAYMENT_CONTAINERS"
 fi
 echo ""
 
@@ -99,7 +99,7 @@ echo ""
 echo "📊 Architecture Summary:"
 echo ""
 echo "   API Workers:       4 (2 containers × 2 workers)"
-echo "   Payment Capacity:  720 concurrent (6 × 6 × 20)"
+echo "   Payment Capacity:  1280 concurrent (8 × 8 × 20)"
 echo "   Order Capacity:    60 concurrent (1 × 4 × 15)"
 echo ""
 echo "🧪 Ready to test!"
