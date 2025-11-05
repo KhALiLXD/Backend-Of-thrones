@@ -16,6 +16,7 @@ import orderRoutes from '../shared/routes/orders.route.js';
 import productsRoute from '../shared/routes/products.route.js';
 import testRouter from '../shared/routes/test.js';
 import stockStream from '../shared/routes/sse/products.route.js'
+import {  startSystemMonitoring } from '../../scripts/resourceScreen.js';
 const app = express();
 const port = 3000;
 
@@ -30,6 +31,8 @@ app.use((req, res, next) => {
   console.log(`\[${date.toString()}\]🧩 Req resived ${connections} -> ${req.method} ${req.originalUrl}`);
   next();
 });
+
+startSystemMonitoring()
 
 await connectDB();
 // await sequelize.sync({ alter: true });
@@ -49,3 +52,4 @@ app.get("/health/redis", async (_req, res) => {
 app.listen(port, () => {
     console.log(`Server running on http://localhost:${port}`);
 });
+
