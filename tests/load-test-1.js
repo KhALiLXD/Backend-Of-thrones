@@ -13,16 +13,16 @@ const purchaseLatency = new Trend('purchase_latency');
 
 export const options = {
   stages: [
-    { duration: '30s', target: 50 },
-    { duration: '1m', target: 100 },
-    { duration: '1m', target: 150 },
-    { duration: '30s', target: 100 },
+    { duration: '30s', target: 50 },   
+    { duration: '1m', target: 150 }, 
+    { duration: '2m', target: 300 },   
+    { duration: '1m', target: 100 },  
     { duration: '30s', target: 0 },
   ],
 };
 
 const BASE_URL = 'http://localhost:3000';
-const PRODUCT_ID = 1;  // Flash sale product (iPhone 15 Pro)
+const PRODUCT_ID = 12;  // Flash sale product (iPhone 15 Pro)
 const MAX_RETRIES = 3;
 
 let TEST_USERS = [];

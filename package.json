@@ -6,7 +6,7 @@
   "author": "",
   "type": "module",
   "scripts": {
-    "start1": "node ./src/approach-1/index.js",
+  "start1": "set UV_THREADPOOL_SIZE=10&& node --max-old-space-size=6144 ./src/approach-1/index.js",
     "dev1": "cross-env NODE_ENV=development nodemon ./src/approach-1/index.js",
     "dev2": "cross-env NODE_ENV=development nodemon ./src/approach-2/index.api.js",
     "insert-product": "node ./scripts/insertProduct.js",
@@ -14,7 +14,8 @@
     "worker:orders": "node ./src/approach-2/workers/orderWorker.js",
     "worker:payments": "node ./src/approach-2/workers/paymentWorker.js",
     "start2": "docker compose up --scale api=3 --scale sse=2 -d",
-    "test2": "k6 run ./tests/load-test-2.js"
+    "test2": "k6 run ./tests/load-test-2.js",
+    "test1": "k6 run ./tests/load-test-1.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
