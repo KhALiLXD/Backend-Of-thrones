@@ -53,11 +53,11 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_IDS = [143];
+const PRODUCT_ID = 1;  // Flash sale product (iPhone 15 Pro)
 const MAX_RETRIES = 3;
 const MAX_STATUS_CHECKS = 60;
-const STATUS_CHECK_INTERVAL = 0.5; 
-const USE_FLASH_BUY=true
+const STATUS_CHECK_INTERVAL = 0.5;
+const USE_FLASH_BUY = true
 let TEST_USERS = [];
 
 export function setup() {
@@ -213,8 +213,8 @@ export default function(data) {
   }
 
   const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
-  const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
-  
+  const productId = PRODUCT_ID;  // Single product for flash sale
+
   const shouldLog = __VU % 100 === 0;
 
   const productRes = http.get(`${BASE_URL}/products/${productId}`, { timeout: '5s' });

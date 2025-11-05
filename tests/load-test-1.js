@@ -22,7 +22,7 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost:3000';
-const PRODUCT_IDS = [1, 2, 3, 4, 5];
+const PRODUCT_ID = 1;  // Flash sale product (iPhone 15 Pro)
 const MAX_RETRIES = 3;
 
 let TEST_USERS = [];
@@ -76,8 +76,8 @@ export default function(data) {
   }
 
   const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
-  const productId = PRODUCT_IDS[Math.floor(Math.random() * PRODUCT_IDS.length)];
-  
+  const productId = PRODUCT_ID;  // Single product for flash sale
+
   const shouldLog = __VU % 50 === 0;
   
   if (shouldLog) {
