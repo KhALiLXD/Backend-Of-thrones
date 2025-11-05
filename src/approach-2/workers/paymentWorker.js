@@ -8,8 +8,8 @@ import processPayment from '../../shared/utils/processPayment.js';
 import { redis } from '../../shared/config/redis.js';
 import { updateOrderStatus } from '../../shared/utils/orderTracing.js';
 
-const workerCount = process.env.PAYMENT_WORKERS || 3;
-const concurrency = process.env.WORKER_CONCURRENCY || 10;
+const workerCount = process.env.PAYMENT_WORKERS || 6;
+const concurrency = process.env.WORKER_CONCURRENCY || 20;
 
 const processPaymentJob = async () => {
     try {
@@ -22,19 +22,12 @@ const processPaymentJob = async () => {
 
         console.log(`[Payment Worker ${process.pid}] Processing payment:`, paymentData);
 
+        // IMPORTANT: Do NOT check stock here!
+        // The API already atomically reserved stock via Redis DECR.
+        // If the order is in this queue, stock was already validated and reserved.
+        // Double-checking here causes false rejections because Redis stock is now 0.
+
         const stockKey = `${paymentData.productId}:STOCK`;
-        const stockCache = await redis.get(stockKey);
-        
-        if (stockCache < 1) {
-            console.log(`[Payment Worker ${process.pid}] ❌ Insufficient stock! Current: ${stockCache}`);
-            
-            await updateOrderStatus(paymentData.orderId, 'failed', {
-                error: 'insufficient stock at payment',
-                failedAt: new Date().toISOString()
-            });
-            
-            return;
-        }
 
         await updateOrderStatus(paymentData.orderId, 'processing_payment');
 
