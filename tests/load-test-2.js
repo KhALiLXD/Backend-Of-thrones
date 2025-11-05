@@ -53,7 +53,7 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_ID = 145;  // Flash sale product (iPhone 15 Pro)
+const PRODUCT_ID = 146;  // Flash sale product (iPhone 15 Pro)
 const MAX_RETRIES = 3;
 const MAX_STATUS_CHECKS = 60;
 const STATUS_CHECK_INTERVAL = 0.5;

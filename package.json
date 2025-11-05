@@ -13,7 +13,7 @@
     "init-stock": "node ./scripts/initStock.js",
     "worker:orders": "node ./src/approach-2/workers/orderWorker.js",
     "worker:payments": "node ./src/approach-2/workers/paymentWorker.js",
-    "start2": "docker compose up --scale api=3 --scale sse=2 -d",
+    "start2": "docker compose up -d --scale api=2 --scale worker-payment=6",
     "test2": "k6 run ./tests/load-test-2.js",
     "test1": "k6 run ./tests/load-test-1.js"
   },
