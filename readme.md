@@ -23,7 +23,6 @@ A sophisticated distributed system built to handle extreme Black Friday traffic 
 - [Project Structure](#-project-structure)
 - [Configuration](#-configuration)
 - [Design Decisions](#-design-decisions)
-- [Troubleshooting](#-troubleshooting)
 
 ---
 
@@ -127,28 +126,21 @@ A distributed, queue-based architecture with:
 ```
 1. User → Nginx → API Worker
    ↓
-2. API: JWT validation (5ms)
+2. API: Redis DECR atomic stock reservation (1-2ms)
    ↓
-3. API: Redis DECR atomic stock reservation (2ms)
+3. API: Push order to Redis queue (1ms)
    ↓
-4. API: Push to order queue (1ms)
+4. API: Return 202 Accepted (Total: 50ms response)
    ↓
-5. API: Return 202 Accepted (Total: 50ms)
+5. Order Worker: Pop from queue → Create order in DB → Push to payment queue
    ↓
-6. Order Worker: Pop from queue
+6. Payment Worker: Process payment (2-3s) → Update order status
    ↓
-7. Order Worker: Save to PostgreSQL
-   ↓
-8. Order Worker: Push to payment queue
-   ↓
-9. Payment Worker: Process payment (2-3s)
-   ↓
-10. Payment Worker: Update order status
-    ↓
-11. User polls /order/:id/status
-    ↓
-12. Final status: "confirmed" or "payment_failed"
+7. User polls /order/:id/status → Gets "confirmed" or "failed"
 ```
+
+**Key point:** API doesn't create the order in database. It only reserves stock and queues it.
+The order worker creates the DB record. This keeps the API fast.
 
 ### Technology Stack
 
@@ -203,7 +195,6 @@ cd Backend-Of-thrones
 docker ps  # Should work without errors
 
 # 3. Run automated deployment script
-chmod +x deploy-optimal.sh
 ./deploy-optimal.sh
 ```
 
@@ -532,26 +523,6 @@ payment_processing_time    # How long payments take
 total_order_time           # End-to-end order time
 ```
 
-### Custom Load Tests
-
-Create your own test:
-```javascript
-// tests/custom-test.js
-import http from 'k6/http';
-import { check } from 'k6';
-
-export const options = {
-  vus: 100,        // 100 virtual users
-  duration: '2m',  // Run for 2 minutes
-};
-
-export default function() {
-  const res = http.get('http://localhost/api/products/1');
-  check(res, { 'status is 200': (r) => r.status === 200 });
-}
-```
-
-Run with: `k6 run tests/custom-test.js`
 
 ---
 
@@ -602,11 +573,7 @@ Backend-Of-thrones/
 ├── Dockerfile                         # Application container
 ├── deploy-optimal.sh                  # Automated deployment
 ├── package.json                       # Node.js dependencies
-├── README.md                          # This file
-├── ARCHITECTURE.md                    # Detailed architecture docs
-├── DEPLOYMENT_GUIDE.md                # Deployment instructions
-├── TESTING_GUIDE.md                   # Testing instructions
-└── OPTIMAL_FLASH_SALE_ARCHITECTURE.md # Architecture analysis
+└── README.md                          # This file (all documentation)
 ```
 
 ---
@@ -650,8 +617,6 @@ JWT_SECRET=your-secret-key-change-in-production
 api:
   environment:
     API_WORKERS: "2"    # Increase for more CPU utilization
-  # To run multiple API containers:
-  # docker compose up -d --scale api=4
 
 # Payment Worker Scaling
 worker-payment:
@@ -659,18 +624,17 @@ worker-payment:
     PAYMENT_WORKERS: "6"        # Workers per container
     WORKER_CONCURRENCY: "20"    # Jobs per worker
   # Total capacity: containers × workers × concurrency
-  # Current: 8 × 8 × 20 = 1280 concurrent payments
+  # Current: 6 × 6 × 20 = 720 concurrent payments
 
-  # To run more payment containers:
-  # docker compose up -d --scale worker-payment=8
 ```
 
 **Capacity Calculation:**
 ```
 Total Capacity = Replicas × Workers × Concurrency
 
-Example (current):
-8 containers × 8 workers × 20 concurrency = 1,280 concurrent jobs
+Example (Current):
+6 containers × 6 workers × 20 concurrency = 720 concurrent jobs
+
 ```
 
 ### Nginx Configuration
@@ -695,8 +659,112 @@ server {
 
 ---
 
-## 🎓 Course Requirements Met
+## 🎯 Design Decisions
 
+### 1. Why Redis for Stock Management?
+
+**Decision:** Use Redis `DECR` for atomic stock reservation
+
+**Alternatives Considered:**
+- PostgreSQL row locking → 10× slower
+- In-memory counter → Lost on restart
+- Database transactions → Lock contention
+
+**Rationale:**
+- ✅ Atomic operations (no race conditions)
+- ✅ Sub-millisecond latency (1-2ms)
+- ✅ Scales horizontally
+- ✅ Persistent with AOF
+
+**Trade-offs:**
+- ⚠️ Additional dependency (Redis)
+- ⚠️ Eventual consistency with PostgreSQL
+
+### 2. Why Queue-Based Architecture?
+
+**Decision:** Asynchronous processing with Redis queues
+
+**Alternatives Considered:**
+- Synchronous processing → Blocks users for 5-10s
+- Database queue table → Slow polling
+- RabbitMQ → More complex setup
+
+**Rationale:**
+- ✅ Immediate response to users (202 in 50ms)
+- ✅ Decouples API from slow operations
+- ✅ Better failure isolation
+- ✅ Horizontal scaling capability
+
+**Trade-offs:**
+- ⚠️ More complex architecture
+- ⚠️ Eventual consistency (order status)
+
+### 3. Why Node.js Clustering?
+
+**Decision:** Multi-process execution with Node.js cluster module
+
+**Alternatives Considered:**
+- Single process → Wastes CPU cores
+- PM2 process manager → External dependency
+- Worker threads → Limited to CPU-bound tasks
+
+**Rationale:**
+- ✅ Utilizes all CPU cores (4× throughput)
+- ✅ Native Node.js feature
+- ✅ Simple implementation
+- ✅ Automatic worker restart
+
+**Trade-offs:**
+- ⚠️ Slightly more memory usage
+- ⚠️ Shared state requires Redis
+
+### 4. Why Horizontal Scaling for Payment Workers?
+
+**Decision:** 6 payment worker containers (720 concurrent capacity)
+
+**Alternatives Considered:**
+- More workers in 1 container → CPU contention
+- Fewer containers + more concurrency → Memory issues
+- Vertical scaling only → Limited by machine size
+
+**Rationale:**
+- ✅ Payment is the bottleneck (identified via testing)
+- ✅ 3.6× capacity increase (200 → 720)
+- ✅ Fault tolerance (if 1 fails, others continue)
+- ✅ Cloud-ready (auto-scaling)
+
+**Trade-offs:**
+- ⚠️ More containers to manage
+- ⚠️ Higher resource usage
+
+### 5. Why Worker Trust Pattern?
+
+**Decision:** Workers trust API's atomic stock reservation
+
+**Problem:** Workers double-checking stock caused false rejections
+
+**Solution:**
+```javascript
+// ❌ WRONG: Worker checks stock again
+const stock = await redis.get(stockKey);
+if (stock < 1) reject();  // False rejection!
+
+// ✅ CORRECT: Trust API's reservation
+// If order is in queue, stock was already validated
+await processPayment(orderData);
+```
+
+**Rationale:**
+- ✅ API atomically reserved stock (Redis DECR)
+- ✅ No need to re-check in worker
+- ✅ Prevents false rejections
+- ✅ Simpler worker logic
+
+---
+
+## Requirements Met
+
+✅ **Request Handling Pattern:** Asynchronous queue (Redis)
 ✅ **Execution Architecture:** Multi-process (Node.js clustering)
 ✅ **Load Distribution:** Nginx load balancer (least connections)
 ✅ **Zero Overselling:** Atomic Redis operations (DECR)
@@ -708,17 +776,11 @@ server {
 ---
 
 ## 👥 Project Information
-
 **Scenario:** E-Commerce Flash Sale System
 
-**Completion Date:** November 2025
-
-**Built by:**
-Bayan Abd El Bary
-Khalil Al-yacoubi
+**Built by:** 
+- Bayan Abd El Bary
+- Khalil Al-yacoubi
 
 ---
-
-
-
 

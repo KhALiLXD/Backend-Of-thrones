@@ -67,7 +67,7 @@ services:
 
   # ============================================
   # PAYMENT WORKER - HORIZONTAL SCALING
-  # 8 containers × 8 workers × 20 = 1280 capacity
+  # 6 containers × 6 workers × 20 = 720 capacity
   # ============================================
   worker-payment:
     build: { context: ., dockerfile: Dockerfile }
@@ -75,7 +75,7 @@ services:
     env_file: .env.docker
     environment:
       SERVICE: worker-payment
-      PAYMENT_WORKERS: "8"         # 8 workers per container (vertical)
+      PAYMENT_WORKERS: "6"         # 6 workers per container (vertical)
       WORKER_CONCURRENCY: "20"     # 20 concurrent per worker
     depends_on:
       postgres: { condition: service_healthy }
