@@ -22,12 +22,7 @@ app.use(express.static('public'));
 // app.use(apiRateLimiter); // disabled for test
 app.set("trust proxy", 1);
 
-app.use((req, res, next) => {
-  const instanceId = process.env.INSTANCE_ID || `PID-${process.pid}`;
-  res.setHeader('X-Instance-ID', instanceId);
-  console.log(` 🧩 ${instanceId} -> ${req.method} ${req.originalUrl}`);
-  next();
-});
+
 await connectDB();
 // await sequelize.sync({ alter: true });
 

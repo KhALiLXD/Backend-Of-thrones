@@ -40,7 +40,11 @@ export const register = async (req,res) => {
             token
         });
     } catch (err) {
-        return res.status(500).json({error: err.message});
+        console.error(`[Auth Controller] Error on Register: ${err.message}`)
+        return res.status(500).json({ 
+            success: false,
+            error: 'failed register' 
+        });
     }
 };
 
@@ -88,6 +92,10 @@ export const getProfile = async (req,res) => {
 
         return res.json({user: user.toJSON()});
     } catch (err) {
-        return res.status(500).json({error: err.message});
+        console.error(`[Auth Controller] Error on Login: ${err.message}`)
+               return res.status(500).json({ 
+            success: false,
+            error: 'failed login' 
+        });
     }
 };
