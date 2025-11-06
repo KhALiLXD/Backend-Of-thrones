@@ -12,9 +12,12 @@ export const getProduct = async (req,res) => {
     }
     return res.json(product.toJSON());
     }catch (err){
-    console.error('[getProduct] error:', e);
-
-      return res.status(500).json({ err: 'internal error' });
+    console.error('[Products Controller] error on get_product:', e);
+        
+         return res.status(500).json({ 
+            success: false,
+            error: 'failed get product' 
+        });
     }
 }
 
@@ -31,7 +34,11 @@ export const createProduct = async (req,res) =>{
         await redis.set(`product:${product.id}:data`,JSON.stringify(product))
         return res.json({message:`success create ${name} Product with id ${product.id}`})
     }catch(err){
-        return res.status(500).json({ error: err.message });
+        console.error(`[products controller] Error on create_product: `,err)
+            return res.status(500).json({ 
+            success: false,
+            error: 'failed creating new procuct' 
+        });
     }
 }    
 
@@ -96,7 +103,8 @@ const disconnect = async () => {
         console.log('Client disconnected from stock storage stream');
 
         }catch(err){
-            console.error("SSE cleanup error:", err);
+            console.error("[Products controller] SSE cleanup error:", err);
+            
         }
     }
     req.on('close', disconnect);

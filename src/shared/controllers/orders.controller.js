@@ -101,12 +101,20 @@ export const buy = async (req,res) => {
                 });
             } catch (refundErr) {
                 await refundTransaction.rollback();
-                return res.status(500).json({error: 'payment failed and refund error: ' + refundErr.message});
+                console.error('[Orders Controller] Error on buy => Payment_transaction: ' + refundErr.message)
+                    return res.status(500).json({ 
+                    success: false,
+                    error: 'payment failed and refund' 
+                });
             }
         }
     } catch (err) {
         await transaction.rollback();
-        return res.status(500).json({error: err.message});
+        console.error(`[Orders Controller] Error on Buy: ${err.message} `)
+        return res.status(500).json({ 
+            success: false,
+            error: 'purchase failed' 
+        });
     }
 }
 
@@ -177,7 +185,7 @@ export const flashBuy = async (req, res) => {
             }
         });
     } catch (err) {
-        console.error('Buy Error', err);
+        console.error('[Orders Controller] Error on flash_buy: ', err);
         return res.status(500).json({ 
             success: false,
             error: 'failed to process order' 
@@ -188,10 +196,8 @@ export const flashBuy = async (req, res) => {
 export const getOrderStatus = async (req, res) => {
     try {
         const { orderId } = req.params;
-        console.log(orderId)
 
         const cachedStatus = await getOrderStatusFromCache(orderId);
-        console.log("cachedStatus",cachedStatus);
         if (cachedStatus) {
             return res.json(cachedStatus);
         }
@@ -225,7 +231,7 @@ export const getOrderStatus = async (req, res) => {
         return res.json(statusData);
         
     } catch (err) {
-        console.error('Get Order Status Error:', err);
+        console.error('[Orders Controller] Error on Get Order Status:', err);
         return res.status(500).json({ 
             success: false,
             error: 'failed to get order status' 
