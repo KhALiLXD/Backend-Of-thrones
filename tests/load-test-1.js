@@ -22,7 +22,7 @@ export const options = {
 };
 
 const BASE_URL = 'http://localhost:3000';
-const PRODUCT_ID = 12;  // Flash sale product (iPhone 15 Pro)
+const PRODUCT_ID = 1;  // Flash sale product (iPhone 15 Pro)
 const MAX_RETRIES = 3;
 
 let TEST_USERS = [];
