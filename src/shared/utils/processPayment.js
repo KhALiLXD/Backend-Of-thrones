@@ -11,7 +11,7 @@ const processPayment = async (paymentDetails) => {
 
   await new Promise((resolve) => setTimeout(resolve, 2500));
 
-  const isSuccess = Math.random() > 0.1;
+  const isSuccess = Math.random() > 0.05; // payment fail 5%
 
   if (!isSuccess) {
     return {
