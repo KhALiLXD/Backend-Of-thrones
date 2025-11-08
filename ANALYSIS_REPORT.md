@@ -122,7 +122,7 @@ performance boundaries of the test environment.
 | HTTP Throughput (req/s) | ~50 req/s | ~258 req/s | **Approach 2** | **≈ 5× increase** |
 | Successful Purchases | 184 | 1,275 | **Approach 2** | **≈ 593% increase** |
 | Confirmed Orders | 184 | 998 | **Approach 2** | 4.4× increase |
-| Order Success Rate (%) | ~26% | ~78% | **Approach 2** | **+52% absolute gain** |
+| Order Success Rate (%) | ~26% | ~78%| **Approach 2** | **+52% absolute gain** |
 | **Resource Utilization** |||||
 | CPU Usage (%) | API thread maxed (one core) | 20–25% per worker | **Approach 2** | Fully utilizes available cores |
 | Memory Usage | ~350–450 MB | 60–150 MB per container | **Approach 2** | Better distribution & stability |
