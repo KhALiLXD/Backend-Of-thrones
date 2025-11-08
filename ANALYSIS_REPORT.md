@@ -66,17 +66,17 @@ Network: Docker bridge (local)
 
 **Container-Level Resource Specification**
 
-To accurately reflect system performance boundaries, the following tables represent the **actual container resources** used during the test. These limits—not the host machine—directly shaped throughput and latency.
+To accurately reflect system performance boundaries, the following tables represent the **actual container resources** used during the test. These limits-not the host machine-directly shaped throughput and latency.
 
 | Service            | vCPU Assigned | Memory Limit | Workers | Concurrency | Total Processing Capacity           |
 | ------------------ | ------------- | ------------ | ------- | ----------- | ----------------------------------- |
 | **API**            | 2 vCPU        | 768MB        | 2       | Async       | Handles HTTP requests + queue push  |
-| **SSE**            | 1 vCPU        | 256MB        | —       | Stream      | Real-time updates                   |
+| **SSE**            | 1 vCPU        | 256MB        | -       | Stream      | Real-time updates                   |
 | **Order Worker**   | 2 vCPU        | 1GB          | 4       | 15 each     | **60 concurrent order validations** |
 | **Payment Worker** | 2 vCPU        | 768MB        | 6       | 20 each     | **120 concurrent payments**         |
-| **Redis**          | 1 vCPU        | 256MB        | —       | Atomic ops  | Queue + stock ops                   |
-| **PostgreSQL**     | 2 vCPU        | 2GB          | —       | —           | ACID order writes                   |
-| **Nginx**          | 1 vCPU        | 256MB        | —       | —           | Load balancing                      |
+| **Redis**          | 1 vCPU        | 256MB        | -       | Atomic ops  | Queue + stock ops                   |
+| **PostgreSQL**     | 2 vCPU        | 2GB          | -       | -           | ACID order writes                   |
+| **Nginx**          | 1 vCPU        | 256MB        | -       | -           | Load balancing                      |
 
 
 
@@ -117,6 +117,7 @@ performance boundaries of the test environment.
 | P95 API Latency (ms) | ~3,856 ms | ~195 ms | **Approach 2** | **≈ 19× faster** |
 | Total Order Time P95 (s) | ~11.7 s | ~9.5 s | **Approach 2** | **≈ 19% faster** |
 | Purchase Latency (ms) | ~1,997 ms | ~8.7 ms | **Approach 2** | **≈ 229× faster** |
+| Order proccesing Time (s) | 1.9s | 5.8s | **Approach 1**  | **≈ ×3 faster** |
 | **Throughput** |||||
 | HTTP Throughput (req/s) | ~50 req/s | ~258 req/s | **Approach 2** | **≈ 5× increase** |
 | Successful Purchases | 184 | 1,275 | **Approach 2** | **≈ 593% increase** |
