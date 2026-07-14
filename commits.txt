@@ -1,0 +1,85 @@
+b415a05 gg
+2b17aea gg
+73e89a5 UPDAATE REPORT
+cd8a994 remove useless load balancer
+2bf602a remove old readme.md
+2db682b create analysis report
+9662d2a wefw
+1ef3da2 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+a05329f Refactor README.md for clarity and structure; update sections on scenario, tech stack, setup instructions, and architecture overview; enhance load testing guidance and project structure details.
+3665c80 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+6a2dd9d read me update
+6a97ada refactor: improve error handling and logging in controllers; update load test product ID
+7be0054 gg
+58f584e add readme file
+9213424 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+655102f fix payment worker
+ebcf1db update package.json
+7b311b8 Implement optimal flash sale architecture with horizontal payment scaling
+7332a2d Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+7299925 Remove incorrect stock double check in payment worker
+b4323cc some updates
+89f160e refactor insert product script
+661946c simple fixes
+f2e5240 CRITICAL FIX
+6b362eb useless update
+1fdddca ggg
+e99db15 new update fr
+9e1f621 update load tester
+4c5c4ed Final Fix yarab
+a96263b ggg
+f270658 feat(payment): enhance order status tracking and error handling
+7c3e2bb Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+a55702d update
+51e9858 ggg
+abe4cb9 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+a234e2c gg
+7de0ca1 fix: decrement product stock in database
+456a828 fix: decrement product stock in database
+c4c76a2 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+17d8e7e Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+6f6276f feat: enhance load testing scripts and analysis for Black Friday sales, improve error handling and logging
+078570d feat: enhance load testing scripts and analysis for Black Friday sales, improve error handling and logging
+108039a feat: implement Approach 2 with Node.js clustering, order worker, payment worker and Redis stock cache
+dd3d3ef feat: implement Approach 2 with Node.js clustering, order worker, payment worker and Redis stock cache
+3194a48 Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+f1501da Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+4dc60e7 add nodemon
+9ce547b add nodemon
+65269fc feat: configure Docker environment variables for API and SSE services
+16f7238 feat: configure Docker environment variables for API and SSE services
+4f721ef feat: implement load balancing with Nginx and Docker, add API and SSE services, and enhance order handling
+d264b9f feat: implement load balancing with Nginx and Docker, add API and SSE services, and enhance order handling
+cf25c2d feat: implement user authentication and order management features with new routes and controllers
+dfa77fc feat: implement user authentication and order management features with new routes and controllers
+8370f62 fix: add missing imports
+d1e070b fix: add missing imports
+01cc152 refactor: clean up product controller code for better readability
+4eb993d refactor: clean up product controller code for better readability
+4ba7112 Merge pull request #2 from KhALiLXD/add_process_limitation
+dff5d73 Merge pull request #2 from KhALiLXD/add_process_limitation
+0f927b4 feat: add process handler limit middleware to manage concurrent requests
+00cb844 feat: add process handler limit middleware to manage concurrent requests
+74846ba fix: resolve module import path and missing verifyToken dependency
+901e187 fix: resolve module import path and missing verifyToken dependency
+4b651cb feat: implement POST /buy endpoint and payment flow
+d60cf4e feat: implement POST /buy endpoint and payment flow
+674bfef Merge pull request #1 from KhALiLXD/implementing_idempotencyKey
+b8ba654 Merge pull request #1 from KhALiLXD/implementing_idempotencyKey
+ad9c4e4 refactor: remove user controller and route files
+777b828 fix: update PostgreSQL database name to flashsale_dev2 in docker-compose
+1d57587 feat: update PostgreSQL database name and add idempotency middleware for order processing
+07d934c feat: implement rate limiting and apply it globally
+aca57e3 update gitignore
+6af5b3b Merge branch 'main' of https://github.com/KhALiLXD/Backend-Of-thrones
+d34218c feat: implement user registration and profile retrieval; update order and product creation logic
+31c9aab feat: Implement JWT authentication & protected routes
+b67c122 feat: add payment utilities and product insertion script
+61b1b10 Add Redis persistence and health checks to docker-compose
+990bda0 fix: update error message for missing fields in createProduct function
+f49f90d fix: correct parameter access in getOrder and update response format
+1cbe06e refactor: reorganize models and routes; implement order and product controllers
+b7fc6ae updating file structure
+fef8ccc file handler patch
+280fd49 db config + prepare api
+3960db7 first commit
