@@ -1,65 +1,54 @@
 import { redis } from "../config/redis.js";
-import crypto from "crypto";
+
 const TTL = 300;
 
+export const idempotency = async (req, res, next) => {
+    const clientKey = req.headers['idempotency-key'];
 
-function stableStringify (obj){
-    const allKeys = [];
-    JSON.stringify(obj,(k,v)=> (allKeys.push(k),v))
-    allKeys.sort()
-    return JSON.stringify(obj,allKeys);
-}
-export const idempotency  = async (req,res,next) => {
-    const userId = req.user?.userId || "anon";
-    const bodyStr = stableStringify(req.body || {});
-    const hash = crypto.createHash("sha256").update(bodyStr).digest("hex");
+    // بلا مفتاح = بلا ضمان. مرّرها.
+    if (!clientKey) return next();
 
+    const userId = req.user?.userId || 'anon';
+    const key = `idem:${userId}:${clientKey}`;
 
-    const  key = `X_:${userId}:${req.method}:${req.originalUrl}:${hash}`
-    const storedKey = await redis.get(key);
+    // حجز ذرّي — واحد بس بيفوز
+    const claimed = await redis.set(
+        key, JSON.stringify({ state: 'PENDING' }), 'NX', 'EX', TTL
+    );
 
-    if (storedKey){
-        const keyData = JSON.parse(storedKey);
+    if (!claimed) {
+        const stored = JSON.parse(await redis.get(key));
 
-        if (keyData.response) {
-            console.log(`[Redis] Process finished on ${key} Key. Sending...`);
-            return res.status(keyData.status).json(keyData.response)
-        }else{
-            console.log(`[Redis] Key is processing. Key: ${key}`);
-            return res.status(409).json({ error: 'Request is already sent.' });
-        }
-    }
-
-    await redis.set(
-        key,
-        JSON.stringify({ status: 'PENDING' }),
-        'EX',
-        TTL
-    )
-
-    console.log(`[Redis] New Key Stored: ${key}`);
-    const resultSnap = res.json.bind(res);
-    res.json = async function (body) {
-        if (res.statusCode >= 200 && res.statusCode < 300){
-            await redis.del(key)
-            console.log(`[Redis] Success Process. Removing Lock..`);
-        }else{
-            const failedResult = { 
-                response: body, 
-                status: res.statusCode,
-                timestamp: new Date().toISOString()
-            };
-
-            await redis.set(
-                key,
-                JSON.stringify(failedResult),
-                'EX',
-                TTL 
-            )
+        if (stored.state === 'PENDING') {
+            // الأصلية لسا شغالة — جرّب بعد شوي
+            res.set('Retry-After', '1');
+            return res.status(425).json({ error: 'idempotent_in_progress' });
         }
 
-        return resultSnap.apply(res,arguments)
+        // أعِد الرد الأصلي — نجاح كان أو فشل
+        console.log(`[idem] replay ${key} → ${stored.status}`);
+        return res.status(stored.status).json(stored.response);
     }
+
+    // فزنا بالحجز. خزّن أي رد رح نطلّعه.
+    const sendJson = res.json.bind(res);
+
+    res.json = function (body) {
+        const status = res.statusCode;
+
+        // 🔑 الأخطاء العابرة مش أجوبة نهائية — حرّر المفتاح
+        //    عشان الـ retry ياخد محاولة حقيقية، مش إعادة خطأ.
+        if (status >= 500 || status === 429 || status === 503) {
+            redis.del(key).catch(e => console.error('[idem] del failed:', e.message));
+        } else {
+            // 2xx و 4xx = أجوبة نهائية. خزّنها للإعادة.
+            redis.set(key, JSON.stringify({
+                state: 'DONE', status, response: body,
+            }), 'EX', TTL).catch(e => console.error('[idem] cache failed:', e.message));
+        }
+
+        return sendJson(body);   // ⚠️ مش async، وما بننتظر Redis
+    };
 
     next();
-}
+};
