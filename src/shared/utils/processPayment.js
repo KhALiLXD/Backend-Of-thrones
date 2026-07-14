@@ -1,38 +1,31 @@
-const processPayment = async (paymentDetails) => {
-  const { amount, currency = "USD", method = "credit_card", orderId } = paymentDetails;
+// src/shared/utils/processPayment.js
+const GATEWAY = process.env.PAYMENT_GATEWAY_URL || 'http://localhost:4001';
+const TIMEOUT_MS = 10000;
 
-  if (!amount || amount <= 0) {
-    throw new Error("Invalid payment amount");
-  }
+export default async function processPayment({ orderId, amount, currency, method }) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
 
-  if (!orderId) {
-    throw new Error("Order ID is required");
-  }
+    try {
+        const res = await fetch(`${GATEWAY}/charge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ orderId, amount, currency, method }),
+            signal: controller.signal,
+        });
+        if (res.status === 402) return { success: false, error: 'card_declined' };
+        if (res.status === 429) return { success: false, error: 'rate_limited', retryable: true };
+        if (!res.ok)            return { success: false, error: `gateway_${res.status}`, retryable: true };
 
-  await new Promise((resolve) => setTimeout(resolve, 2500));
+        const body = await res.json();
+        return { success: true, transactionId: body.transactionId,res };
 
-  const isSuccess = Math.random() > 0.05; // payment fail 5%
-
-  if (!isSuccess) {
-    return {
-      success: false,
-      error: "Payment declined by processor",
-      orderId,
-      timestamp: new Date().toISOString(),
-    };
-  }
-
-  const transactionId = `TXN-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`;
-
-  return {
-    success: true,
-    transactionId,
-    orderId,
-    amount,
-    currency,
-    method,
-    timestamp: new Date().toISOString(),
-  };
-};
-
-export default processPayment;
+    } catch (err) {
+        if (err.name === 'AbortError') {
+            return { success: false, error: 'gateway_timeout', unknown: true };
+        }
+        return { success: false, error: err.message, retryable: true };
+    } finally {
+        clearTimeout(timer);
+    }
+}
