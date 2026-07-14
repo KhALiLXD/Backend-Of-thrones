@@ -1,460 +1,249 @@
+// ============================================================================
+// APPROACH 2 — QUEUE-BASED WORKERS
+//
+//   k6 run tests/load-test-2.js                    -> A/B  (closed, 300 VUs)
+//   k6 run -e PROFILE=stress tests/load-test-2.js  -> STRESS (open, arrival rate)
+//
+// The API validates, reserves stock atomically in Redis, enqueues, and returns
+// 202. Fulfillment happens in background workers, so the HTTP response is NOT
+// the confirmation — completion must be observed separately. That is why this
+// file has a status loop and load-test-1 does not. Architectural difference,
+// not a measurement one.
+//
+// POLLING NOTE: the system exposes SSE (/sse/products/stock/:id), but this
+// test POLLS. Polling is what is measured, so no claim about SSE reducing
+// load may be drawn from these numbers.
+//
+// STRESS NOTE: the stress profile does NOT poll. At 6,000 req/s, holding each
+// VU for a 30s status loop would require ~180,000 concurrent VUs. So stress
+// measures INGRESS capacity (can the API absorb the burst?) and the real
+// fulfillment count is read from the DB after the queue drains:
+//
+//     SELECT status, count(*) FROM "Orders" GROUP BY status;
+//
+// That split is itself the finding: Approach 2 can ACK a burst it cannot yet
+// FULFILL. The queue absorbs it. Approach 1 has nowhere to put it.
+// ============================================================================
+
 import http from 'k6/http';
-import { check, sleep } from 'k6';
-import { Counter, Trend, Rate } from 'k6/metrics';
+import { sleep } from 'k6';
+import {
+    OPTIONS, PROFILE, PRODUCT_ID, MAX_RETRIES, RETRYABLE,
+    THINK_TIME, TRACK_ORDERS,
+    metrics, backoff, idempotencyKey, randomToken,
+    verifyPreconditions, reportInvariant,
+} from './config.js';
 
-const successfulPurchases = new Counter('successful_purchases');
-const fullyConfirmedOrders = new Counter('fully_confirmed_orders');
+export const options = OPTIONS;
 
-const paymentDeclined = new Counter('payment_declined_402');
-const outOfStock = new Counter('out_of_stock_409');
-const queueFull = new Counter('queue_full_503');
-const rateLimited = new Counter('rate_limited_429');
-
-const badRequest = new Counter('bad_request_400');
-const unauthorized = new Counter('unauthorized_401');
-const notFound = new Counter('not_found_404');
-const timeout = new Counter('timeout_408');
-const serverErrors = new Counter('server_errors_5xx');
-const unknownErrors = new Counter('unknown_errors');
-
-const purchaseLatency = new Trend('purchase_latency');
-const orderProcessingTime = new Trend('order_processing_time');
-const paymentProcessingTime = new Trend('payment_processing_time');
-const totalOrderTime = new Trend('total_order_time');
-
-const ordersQueued = new Counter('orders_queued');
-const ordersProcessing = new Counter('orders_processing');
-const ordersPending = new Counter('orders_pending');
-const ordersAwaitingPayment = new Counter('orders_awaiting_payment');
-const ordersProcessingPayment = new Counter('orders_processing_payment');
-const ordersConfirmed = new Counter('orders_confirmed');
-const ordersFailed = new Counter('orders_failed');
-const ordersPaymentFailed = new Counter('orders_payment_failed');
-const ordersTimeout = new Counter('orders_timeout');
-
-const orderSuccessRate = new Rate('order_success_rate');
-
-export const options = {
-  stages: [
-    { duration: '30s', target: 50 },   
-    { duration: '1m', target: 150 }, 
-    { duration: '2m', target: 300 },   
-    { duration: '1m', target: 100 },  
-    { duration: '30s', target: 0 },
-  ],
-  thresholds: {
-    'server_errors_5xx': ['count<100'],
-    'bad_request_400': ['count<50'],
-    'unauthorized_401': ['count<10'],
-    'timeout_408': ['count<50'],
-    'order_success_rate': ['rate>0.85'], 
-    'total_order_time': ['p(95)<15000'],
-  }
-};
-
+// ARCHITECTURAL: behind nginx, load-balanced across 2 API containers.
 const BASE_URL = 'http://localhost/api';
-const PRODUCT_ID = 1;  // Flash sale product (iPhone 15 Pro)
-const MAX_RETRIES = 3;
-const MAX_STATUS_CHECKS = 60;
+const PURCHASE_ENDPOINT = `${BASE_URL}/order/buy-flash`;
+
+const MAX_STATUS_CHECKS = 60;        // 60 x 0.5s = 30s window
 const STATUS_CHECK_INTERVAL = 0.5;
-const USE_FLASH_BUY = true
-let TEST_USERS = [];
 
 export function setup() {
-  console.log('\n' + '='.repeat(70));
-  console.log('🚀 BLACK FRIDAY LOAD TEST - WITH ORDER TRACKING');
-  console.log('='.repeat(70) + '\n');
-
-  console.log('Creating test users...');
-  for (let i = 0; i < 50; i++) {
-    const userData = {
-      name: `TestUser${i}`,
-      email: `testuser${i}@test.com`,
-      password: 'test123456'
-    };
-
-    try {
-      let res = http.post(
-        `${BASE_URL}/auth/register`,
-        JSON.stringify(userData),
-        { headers: { 'Content-Type': 'application/json' }, timeout: '10s' }
-      );
-
-      if (res.status === 409) {
-        res = http.post(
-          `${BASE_URL}/auth/login`,
-          JSON.stringify({ email: userData.email, password: userData.password }),
-          { headers: { 'Content-Type': 'application/json' }, timeout: '10s' }
-        );
-      }
-
-      if (res.status === 200 || res.status === 201) {
-        TEST_USERS.push(JSON.parse(res.body).token);
-      }
-    } catch (e) {
-      console.log(`Failed to setup user ${i}`);
-    }
-  }
-
-  console.log(`✅ ${TEST_USERS.length} users ready\n`);
-  return { testUsers: TEST_USERS };
+    console.log('\n' + '='.repeat(74));
+    console.log('  APPROACH 2 — QUEUE-BASED WORKERS');
+    console.log('='.repeat(74));
+    verifyPreconditions(BASE_URL);
+    console.log('='.repeat(74) + '\n');
 }
 
-function trackOrderStatus(orderId, userToken, shouldLog) {
-  let currentStatus = 'queued';
-  let attempts = 0;
-  const startTime = Date.now();
-  let lastStatus = null;
-  
-  const statusTimings = {
-    queued: null,
-    processing: null,
-    pending: null,
-    awaiting_payment: null,
-    processing_payment: null,
-    confirmed: null,
-    failed: null
-  };
+// ---------------------------------------------------------------------------
+// Poll a queued order to a terminal state.  (A/B profile only.)
+// ---------------------------------------------------------------------------
+function trackOrder(orderId, token, acceptedAt) {
+    for (let i = 0; i < MAX_STATUS_CHECKS; i++) {
+        sleep(STATUS_CHECK_INTERVAL);
 
-  while (attempts < MAX_STATUS_CHECKS) {
-    sleep(STATUS_CHECK_INTERVAL);
-    attempts++;
+        const res = http.get(`${BASE_URL}/order/${orderId}/status`, {
+            headers: { 'Authorization': `Bearer ${token}` },
+            timeout: '10s',
+        });
 
-    try {
-      const statusRes = http.get(
-        `${BASE_URL}/order/${orderId}/status`,
-        {
-          headers: { 'Authorization': `Bearer ${userToken}` },
-          timeout: '5s'
-        }
-      );
+        if (res.status !== 200) continue;
 
-      if (statusRes.status === 200) {
-        const data = JSON.parse(statusRes.body);
-        currentStatus = data.status;
-        
-        if (currentStatus !== lastStatus && statusTimings.hasOwnProperty(currentStatus)) {
-          statusTimings[currentStatus] = Date.now() - startTime;
-          lastStatus = currentStatus;
-          
-          switch(currentStatus) {
-            case 'queued': ordersQueued.add(1); break;
-            case 'processing': ordersProcessing.add(1); break;
-            case 'pending': ordersPending.add(1); break;
-            case 'awaiting_payment': ordersAwaitingPayment.add(1); break;
-            case 'processing_payment': ordersProcessingPayment.add(1); break;
-            case 'confirmed': ordersConfirmed.add(1); break;
-            case 'failed': ordersFailed.add(1); break;
-            case 'payment_failed': ordersPaymentFailed.add(1); break;
-          }
+        let status;
+        try {
+            status = JSON.parse(res.body).status;
+        } catch (e) {
+            continue;
         }
 
-        if (currentStatus === 'confirmed') {
-          const totalTime = Date.now() - startTime;
-          totalOrderTime.add(totalTime);
-          
-          if (statusTimings.processing && statusTimings.queued) {
-            orderProcessingTime.add(statusTimings.processing - statusTimings.queued);
-          }
-          
-          if (statusTimings.confirmed && statusTimings.awaiting_payment) {
-            paymentProcessingTime.add(statusTimings.confirmed - statusTimings.awaiting_payment);
-          }
-          
-          fullyConfirmedOrders.add(1);
-          orderSuccessRate.add(1);
-          
-          if (shouldLog) {
-            console.log(`[Order ${orderId}] ✅ CONFIRMED in ${totalTime}ms`);
-            console.log(`  Timings: queued→processing: ${statusTimings.processing}ms, payment: ${statusTimings.confirmed - statusTimings.awaiting_payment}ms`);
-          }
-          
-          return { success: true, status: 'confirmed', totalTime, statusTimings };
-        }
-        
-        if (currentStatus === 'failed' || currentStatus === 'payment_failed') {
-          const totalTime = Date.now() - startTime;
-          orderSuccessRate.add(0);
-          
-          if (shouldLog) {
-            console.log(`[Order ${orderId}] ❌ FAILED: ${currentStatus} after ${totalTime}ms`);
-            if (data.error) console.log(`  Error: ${data.error}`);
-          }
-          
-          return { success: false, status: currentStatus, totalTime, error: data.error };
+        if (status === 'confirmed') {
+            metrics.ordersConfirmed.add(1);
+            metrics.totalOrderTime.add(Date.now() - acceptedAt);
+            metrics.orderSuccessRate.add(1);
+            return;
         }
 
-      } else if (statusRes.status === 404) {
-        if (shouldLog) console.log(`[Order ${orderId}] ❌ NOT FOUND (404)`);
-        return { success: false, status: 'not_found', error: 'order not found' };
-      }
+        if (status === 'payment_failed' || status === 'failed') {
+            if (status === 'payment_failed') metrics.paymentDeclined.add(1);
+            metrics.ordersFailed.add(1);
+            metrics.totalOrderTime.add(Date.now() - acceptedAt);
+            metrics.orderSuccessRate.add(0);
+            return;
+        }
 
-    } catch (e) {
-      if (shouldLog) console.log(`[Order ${orderId}] ⚠️  Status check error: ${e.message}`);
+        // The gateway timed out and the charge outcome is UNKNOWN. The system
+        // deliberately refuses to guess: it will not release the stock (the
+        // customer may have been charged) and it will not confirm (they may
+        // not have been). It flags for manual reconciliation instead.
+        if (status === 'needs_reconciliation') {
+            console.error(`[RECONCILIATION] ${orderId} — gateway outcome unknown`);
+            metrics.needsReconciliation.add(1);
+            metrics.orderSuccessRate.add(0);
+            return;
+        }
+
+        // pending / processing / awaiting_payment / processing_payment -> wait
     }
-  }
 
-  const totalTime = Date.now() - startTime;
-  ordersTimeout.add(1);
-  orderSuccessRate.add(0);
-  
-  if (shouldLog) {
-    console.log(`[Order ${orderId}] ⏱️  TIMEOUT after ${attempts} checks (${totalTime}ms)`);
-    console.log(`  Last known status: ${currentStatus}`);
-  }
-  
-  return { success: false, status: 'timeout', lastKnownStatus: currentStatus, totalTime };
+    // Never resolved inside the window. From the customer's point of view an
+    // order that never completes has failed.
+    metrics.ordersTimeout.add(1);
+    metrics.orderSuccessRate.add(0);
 }
 
-export default function(data) {
-  if (!data || !data.testUsers || data.testUsers.length === 0) {
-    console.log('❌ No users available');
-    return;
-  }
+export default function () {
+    const token = randomToken();
 
-  const userToken = data.testUsers[Math.floor(Math.random() * data.testUsers.length)];
-  const productId = PRODUCT_ID;  // Single product for flash sale
+    // ---- Shopper behaviour (A/B profile only) ------------------------------
+    if (THINK_TIME) {
+        const productRes = http.get(`${BASE_URL}/products/${PRODUCT_ID}`, { timeout: '10s' });
 
-  const shouldLog = __VU % 100 === 0;
-
-  const productRes = http.get(`${BASE_URL}/products/${productId}`, { timeout: '5s' });
-  
-  if (productRes.status !== 200) {
-    if (shouldLog) console.log(`[VU ${__VU}] ❌ Failed to get product`);
-    return;
-  }
-
-  let product;
-  try {
-    product = JSON.parse(productRes.body);
-  } catch (e) {
-    if (shouldLog) console.log(`[VU ${__VU}] ❌ Failed to parse product`);
-    return;
-  }
-
-  if (product.stock <= 0) {
-    if (shouldLog) console.log(`[VU ${__VU}] ⚠️  Product already out of stock`);
-    outOfStock.add(1);
-    return;
-  }
-
-  sleep(0.3);
-
-  let purchaseSuccess = false;
-  let orderId = null;
-  
-  const endpoint = USE_FLASH_BUY ? `${BASE_URL}/order/buy-flash` : `${BASE_URL}/order/buy`;
-  
-  for (let attempt = 1; attempt <= MAX_RETRIES && !purchaseSuccess; attempt++) {
-    const purchasePayload = JSON.stringify({ productId: productId });
-    const startTime = Date.now();
-
-    let purchaseRes;
-    try {
-      purchaseRes = http.post(
-        endpoint,
-        purchasePayload,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${userToken}`,
-          },
-          timeout: '15s',
+        if (productRes.status !== 200) {
+            metrics.unknownErrors.add(1);
+            sleep(1);
+            return;
         }
-      );
-    } catch (e) {
-      if (shouldLog) console.log(`[VU ${__VU}] ❌ Request exception: ${e.message}`);
-      unknownErrors.add(1);
-      
-      if (attempt < MAX_RETRIES) {
-        sleep(2 * attempt);
-        continue;
-      }
-      return;
+
+        let product;
+        try {
+            product = JSON.parse(productRes.body);
+        } catch (e) {
+            metrics.unknownErrors.add(1);
+            return;
+        }
+
+        if (product.stock <= 0) {
+            metrics.outOfStock.add(1);
+            return;
+        }
+
+        sleep(0.3);
     }
 
-    const duration = Date.now() - startTime;
-    purchaseLatency.add(duration);
+    // ---- Purchase ---------------------------------------------------------
+    const idemKey = idempotencyKey(__VU, __ITER);
+    let firstOrderId = null;
 
-    if (purchaseRes.status === 202 || purchaseRes.status === 200 || purchaseRes.status === 201) {
-      successfulPurchases.add(1);
-      purchaseSuccess = true;
-      
-      try {
-        const responseData = JSON.parse(purchaseRes.body);
-        orderId = responseData.orderId || responseData.order?.id;
-        
-        if (shouldLog) {
-          console.log(`[VU ${__VU}] ✅ Order Created: ${orderId || 'N/A'}`);
-          console.log(`  Status: ${responseData.status || 'success'}`);
-          if (responseData.checkStatusUrl) {
-            console.log(`  Check URL: ${responseData.checkStatusUrl}`);
-          }
+    for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+        const start = Date.now();
+
+        let res;
+        try {
+            res = http.post(
+                PURCHASE_ENDPOINT,
+                JSON.stringify({ productId: PRODUCT_ID }),
+                {
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`,
+                        'Idempotency-Key': idemKey,
+                    },
+                    timeout: '60s',
+                }
+            );
+        } catch (e) {
+            metrics.timeouts.add(1);
+            metrics.purchaseErrors.add(1);
+            if (attempt < MAX_RETRIES) { sleep(backoff(attempt)); continue; }
+            metrics.ordersTimeout.add(1);
+            metrics.orderSuccessRate.add(0);
+            return;
         }
-        
-        if (orderId) {
-          const trackingResult = trackOrderStatus(orderId, userToken, shouldLog);
-          
-          if (!trackingResult.success) {
-            if (trackingResult.status === 'timeout') {
-              timeout.add(1);
+
+        const elapsed = Date.now() - start;
+        metrics.purchaseLatency.add(elapsed);
+
+        // ---- ACCEPTED (202) -----------------------------------------------
+        // Stock is RESERVED and the order is queued. This is the ACK, not the
+        // confirmation. The whole point of the architecture is that this
+        // number stays small while fulfillment happens elsewhere.
+        if (res.status === 202 || res.status === 201 || res.status === 200) {
+            let orderId;
+            try {
+                orderId = JSON.parse(res.body).orderId;
+            } catch (e) {
+                metrics.unknownErrors.add(1);
+                metrics.purchaseErrors.add(1);
+                return;
             }
-          }
-        } else if (USE_FLASH_BUY) {
-          if (shouldLog) console.log(`[VU ${__VU}] ⚠️  No orderId returned from flash-buy!`);
-        } else {
-          fullyConfirmedOrders.add(1);
-          orderSuccessRate.add(1);
-          if (shouldLog) console.log(`[VU ${__VU}] ✅ Regular buy completed immediately`);
+
+            if (!orderId) {
+                console.error('[BUG] accepted with no orderId');
+                metrics.unknownErrors.add(1);
+                metrics.purchaseErrors.add(1);
+                return;
+            }
+
+            // A retry must replay the ORIGINAL order. A different id means the
+            // retry consumed a SECOND unit of stock.
+            if (attempt > 1 && firstOrderId !== null) {
+                if (String(orderId) === String(firstOrderId)) {
+                    metrics.idempotentReplays.add(1);
+                } else {
+                    metrics.idempotencyBreaks.add(1);
+                    console.error(`[IDEMPOTENCY BREAK] key=${idemKey} first=${firstOrderId} retry=${orderId}`);
+                }
+            }
+            if (firstOrderId === null) firstOrderId = orderId;
+
+            metrics.purchasesAccepted.add(1);
+            metrics.purchaseErrors.add(0);
+
+            if (TRACK_ORDERS) trackOrder(orderId, token, start);
+            return;
         }
-        
-      } catch (e) {
-        if (shouldLog) console.log(`[VU ${__VU}] ❌ Failed to parse response: ${e.message}`);
-      }
-      
-      return;
+
+        // ---- SOLD OUT (terminal) ------------------------------------------
+        // The Redis DECR went negative and was rolled back. Correct behaviour.
+        if (res.status === 409) {
+            metrics.outOfStock.add(1);
+            metrics.purchaseErrors.add(0);
+            return;
+        }
+
+        // ---- Terminal client errors ---------------------------------------
+        if (res.status === 401) { metrics.unauthorized.add(1); metrics.purchaseErrors.add(1); return; }
+        if (res.status === 400) { metrics.badRequest.add(1);   metrics.purchaseErrors.add(1); return; }
+
+        // ---- Transient — retry --------------------------------------------
+        // 503 = the queue limiter shed load. That is backpressure working as
+        // designed, so the client backs off and retries with the SAME key.
+        if (res.status === 503)      metrics.queueFull.add(1);
+        else if (res.status === 429) metrics.rateLimited.add(1);
+        else if (res.status === 425) { /* idempotency in-flight — retry */ }
+        else if (res.status === 408) metrics.timeouts.add(1);
+        else if (res.status >= 500)  metrics.serverErrors.add(1);
+        else                         metrics.unknownErrors.add(1);
+
+        metrics.purchaseErrors.add(1);
+
+        if (RETRYABLE.includes(res.status) && attempt < MAX_RETRIES) {
+            sleep(backoff(attempt));
+            continue;
+        }
+
+        metrics.ordersFailed.add(1);
+        metrics.orderSuccessRate.add(0);
+        return;
     }
-    
-    else if (purchaseRes.status === 402) {
-      paymentDeclined.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] 💳 Payment Declined (402)`);
-      return;
-    }
-    
-    else if (purchaseRes.status === 409) {
-      outOfStock.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] 📦 Out of Stock (409)`);
-      return;
-    }
-    
-    else if (purchaseRes.status === 503) {
-      queueFull.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] ⏳ Queue Full (503)`);
-      
-      if (attempt < MAX_RETRIES) {
-        sleep(2 * attempt);
-        continue;
-      }
-      return;
-    }
-    
-    else if (purchaseRes.status === 429) {
-      rateLimited.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] 🚦 Rate Limited (429)`);
-      
-      if (attempt < MAX_RETRIES) {
-        sleep(3 * attempt);
-        continue;
-      }
-      return;
-    }
-    
-    else if (purchaseRes.status === 400) {
-      badRequest.add(1);
-      if (shouldLog) {
-        console.log(`[VU ${__VU}] ⚠️  BAD REQUEST (400)`);
-        console.log(`Body: ${purchaseRes.body}`);
-      }
-      return;
-    }
-    
-    else if (purchaseRes.status === 401) {
-      unauthorized.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  UNAUTHORIZED (401)`);
-      return;
-    }
-    
-    else if (purchaseRes.status === 404) {
-      notFound.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  NOT FOUND (404)`);
-      return;
-    }
-    
-    else if (purchaseRes.status === 408) {
-      timeout.add(1);
-      if (shouldLog) console.log(`[VU ${__VU}] ⚠️  TIMEOUT (408)`);
-      
-      if (attempt < MAX_RETRIES) {
-        sleep(3 * attempt);
-        continue;
-      }
-      return;
-    }
-    
-    else if (purchaseRes.status >= 500 && purchaseRes.status < 600) {
-      serverErrors.add(1);
-      if (shouldLog) {
-        console.log(`[VU ${__VU}] 🚨 SERVER ERROR (${purchaseRes.status})`);
-        console.log(`Body: ${purchaseRes.body ? purchaseRes.body.substring(0, 200) : 'empty'}`);
-      }
-      
-      if (attempt < MAX_RETRIES) {
-        sleep(2 * attempt);
-        continue;
-      }
-      return;
-    }
-    
-    else {
-      unknownErrors.add(1);
-      if (shouldLog) {
-        console.log(`[VU ${__VU}] ❓ UNKNOWN STATUS: ${purchaseRes.status}`);
-        console.log(`Body: ${purchaseRes.body ? purchaseRes.body.substring(0, 200) : 'empty'}`);
-      }
-      return;
-    }
-  }
 }
 
-export function teardown(data) {
-  console.log('\n' + '='.repeat(70));
-  console.log('📊 DETAILED TEST RESULTS ANALYSIS');
-  console.log('='.repeat(70));
-  
-  console.log('\n✅ SUCCESS METRICS:');
-  console.log('  • successful_purchases - الطلبات المُنشأة (202)');
-  console.log('  • fully_confirmed_orders - الطلبات المؤكدة كاملاً');
-  console.log('  • order_success_rate - معدل النجاح الكلي');
-  
-  console.log('\n📈 ORDER STATUS FLOW:');
-  console.log('  • orders_queued - في قائمة الانتظار');
-  console.log('  • orders_processing - جاري المعالجة');
-  console.log('  • orders_pending - محفوظة في DB');
-  console.log('  • orders_awaiting_payment - في انتظار الدفع');
-  console.log('  • orders_processing_payment - جاري الدفع');
-  console.log('  • orders_confirmed - مؤكدة ✅');
-  console.log('  • orders_failed - فاشلة ❌');
-  console.log('  • orders_payment_failed - فشل الدفع 💳');
-  console.log('  • orders_timeout - Timeout ⏱️');
-  
-  console.log('\n⏱️ PERFORMANCE METRICS:');
-  console.log('  • purchase_latency - وقت إنشاء الطلب');
-  console.log('  • order_processing_time - وقت المعالجة (queued → pending)');
-  console.log('  • payment_processing_time - وقت الدفع');
-  console.log('  • total_order_time - الوقت الكلي (queued → confirmed)');
-  
-  console.log('\n🔴 EXPECTED FAILURES (طبيعية):');
-  console.log('  • payment_declined_402 - فشل دفع');
-  console.log('  • out_of_stock_409 - المخزون خلص');
-  console.log('  • queue_full_503 - الطابور ممتلئ');
-  console.log('  • rate_limited_429 - Rate limiting');
-  
-  console.log('\n⚠️  REAL ISSUES (يجب التحقيق!):');
-  console.log('  • bad_request_400 - خطأ في البيانات');
-  console.log('  • unauthorized_401 - مشكلة Auth');
-  console.log('  • not_found_404 - منتج مش موجود');
-  console.log('  • timeout_408 - بطء في المعالجة');
-  console.log('  • server_errors_5xx - أخطاء السيرفر');
-  console.log('  • unknown_errors - أخطاء غير معروفة');
-  
-  console.log('\n💡 ANALYSIS TIPS:');
-  console.log('  1. قارن successful_purchases مع fully_confirmed_orders');
-  console.log('  2. شوف order_success_rate - لازم يكون فوق 85% للطلبات المقبولة');
-  console.log('  3. راقب total_order_time - لازم p95 أقل من 15 ثانية');
-  console.log('  4. لو orders_timeout كثيرة، في مشكلة أداء في الـ workers!');
-  console.log('  5. تتبع الـ Order Flow عشان تعرف وين الـ bottleneck');
-  console.log('  6. 409/503 طبيعية - معناها النظام بيحمي نفسه');
-  console.log('  7. المهم: من الطلبات اللي دخلت (202)، كم وصلت confirmed؟');
-  
-  console.log('\n' + '='.repeat(70) + '\n');
+export function teardown() {
+    reportInvariant(BASE_URL, 'APPROACH 2 — QUEUE-BASED');
 }
