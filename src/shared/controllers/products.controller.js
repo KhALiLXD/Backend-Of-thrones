@@ -73,8 +73,8 @@ export const productStockStream = async (req,res) =>{
             res.end();
             return
         };
-        redis.set(channel,String(stock))
-        redis.publish(channel,String(stock));
+        redis.set(channel, String(stock.stock))
+        redis.publish(channel, String(stock.stock));
     }
     const sub = redis.duplicate();
     await sub.subscribe(channel);
