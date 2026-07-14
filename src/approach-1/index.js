@@ -26,7 +26,7 @@ app.use(express.static('public'));
 // app.use(apiRateLimiter); // for testing
 app.set("trust proxy", 1);
 
-startSystemMonitoring()
+// startSystemMonitoring()
 
 await connectDB();
 // await sequelize.sync({ alter: true });
