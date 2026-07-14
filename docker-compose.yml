@@ -1,4 +1,20 @@
 services:
+
+  mock-gateway:
+    build: { context: ., dockerfile: Dockerfile }
+    command: ["node","src/mock-gateway/index.js"]
+    environment:
+      SERVICE: mock-gateway
+    ports: ["4001:4001"]
+    restart: unless-stopped                              # ← لو وقعت، ترجع
+    healthcheck:
+      test: ["CMD-SHELL","curl -sf http://localhost:4001/health || exit 1"]
+      interval: 5s
+      timeout: 2s
+      retries: 20
+    cpus: "1.0"
+    mem_limit: "256m"
+
   # ============================================
   # API SERVICE - Hybrid Scaling
   # 2 containers × 2 workers = 4 total workers
@@ -77,9 +93,11 @@ services:
       SERVICE: worker-payment
       PAYMENT_WORKERS: "6"         # 6 workers per container (vertical)
       WORKER_CONCURRENCY: "20"     # 20 concurrent per worker
+      PAYMENT_GATEWAY_URL: "http://mock-gateway:4001"
     depends_on:
       postgres: { condition: service_healthy }
       redis: { condition: service_healthy }
+      mock-gateway: { condition: service_healthy }       
     cpus: "2.0"                    # 2 CPUs per container
     mem_limit: "768m"
     mem_reservation: "512m"
@@ -108,7 +126,7 @@ services:
     env_file: .env.docker
     ports: ["5432:5432"]
     volumes:
-      - pg-data:/var/lib/postgresql/data
+      - pg-data:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL","pg_isready -U postgres -d flashsale -h localhost -p 5432"]
       interval: 3s
@@ -132,6 +150,7 @@ services:
     cpus: "1.0"
     mem_limit: "256m"
     mem_reservation: "64m"
+
 
 volumes:
   pg-data:
