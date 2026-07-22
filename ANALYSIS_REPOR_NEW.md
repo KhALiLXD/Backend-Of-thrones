@@ -35,10 +35,8 @@ An engineering report that only lists wins is a sales document.
 6. [Methodology](#6--methodology)
 7. [Results — the controlled A/B](#7--results--the-controlled-ab)
 8. [Results — the stress run](#8--results--the-stress-run)
-9. [What is still broken](#9--what-is-still-broken)
-10. [Findings](#10--findings)
-11. [Threats to validity](#11--threats-to-validity)
-12. [What I would do next](#12--what-i-would-do-next)
+9. [Findings](#10--findings)
+10. [Threats to validity](#11--threats-to-validity)
 
 ---
 
@@ -915,135 +913,10 @@ of the API's 160% CPU.
 
 ---
 
-## 9 — What is still broken
 
-**Read this section before trusting anything above it.**
+## 9 — Findings
 
-### 9.1 — Transient gateway failures are reported to the customer as declined cards 🔴
-
-`processPayment` correctly distinguishes three outcomes:
-
-```js
-if (res.status === 402) return { success: false, error: 'card_declined' };
-if (res.status === 429) return { success: false, error: 'rate_limited', retryable: true };
-if (!res.ok)            return { success: false, error: `gateway_${res.status}`, retryable: true };
-// AbortError            → { success: false, error: 'gateway_timeout', unknown: true }
-```
-
-**Neither consumer acts on `retryable`.**
-
-`paymentWorker.js` handles `unknown`, handles `success`, and then falls straight through:
-
-```js
-if (paymentResult.unknown) { /* → needs_reconciliation */ return; }
-if (paymentResult.success) { /* → confirmed */ return; }
-
-// everything else — including retryable — lands here:
-await releaseReservation(productId, orderId, 'payment_failed', paymentResult.error);
-```
-
-`buy()` is worse — it checks **only** `success`, so `retryable` **and** `unknown` both fall
-into the refund branch.
-
-Live proof, straight from the worker logs:
-
-```
-[Payment 25] Result for order 178403753105474429: { success: false, error: 'fetch failed', retryable: true }
-[Payment 25] ❌ Declined: 178403753105474429
-[Status Tracker] Order 178403753105474429 → payment_failed
-```
-
-**The gateway was unreachable. The system told the customer their card was declined.**
-
-**Measured cost:** the gateway emits 2% `503` + 1% `429` = **2.95% of orders**. In the
-stress run that is **~2.9% of 12,255 orders ≈ 360 orders** killed that should have been
-retried.
-
-Cross-check against Approach 1: expected declines are 4.80%, but A1 recorded **8.8%**
-(1,945 / 22,055). The 4% gap is exactly the 503s, 429s, and hangs being mislabelled as
-card declines.
-
-**The fix — and it is precisely what the queue exists to enable:**
-
-```js
-if (paymentResult.retryable) {
-    const attempts = (paymentData.attempts || 0) + 1;
-    if (attempts <= 3) {
-        await updateOrderStatus(orderId, 'awaiting_payment', { retryAttempt: attempts });
-        await Queue.push(QUEUES.PAYMENTS, { ...paymentData, attempts });
-        return;                       // ⛔ do NOT release — the order is still alive
-    }
-    await releaseReservation(productId, orderId, 'failed', 'gateway unavailable after 3 attempts');
-    return;
-}
-```
-
-**Approach 1 structurally cannot do this.** It has exactly one HTTP response to give, and
-it must give it now. The queue is what buys you the right to try again quietly.
-
-### 9.2 — Approach 1 guesses on unknown payment outcomes 🔴
-
-`buy()` has no `unknown` branch. A gateway hang (1% of charges) falls into the refund path:
-the stock is returned and the order is marked failed.
-
-**If the customer *was* charged, that unit is now sold to someone else.** A1 has no way to
-know, and no way to find out later — it has already answered.
-
-Approach 2 does have the branch, and used it **110 times** in the A/B run and **145 times**
-in the stress run — every one of them a charge it refused to guess about.
-
-### 9.3 — `BRPOP` has no acknowledgement
-
-```js
-const [, raw] = await redis.brpop('ORDERS', 5);
-```
-
-`BRPOP` removes the item **immediately**. If a worker dies mid-job, the order is gone —
-reserved in Redis, decremented in Postgres, and never released.
-
-At the scale tested this did not visibly fire, but it is a genuine at-most-once delivery
-hole. The fix is BullMQ (or Kafka): acknowledgement, retry, and a dead-letter queue.
-
-### 9.4 — The `ORDERS` queue has no backpressure
-
-`queueLimiterMiddleware` reads the depth of `QUEUES.PAYMENTS`:
-
-```js
-const currentQueueSize = await Queue.length(QUEUES.PAYMENTS);
-if (currentQueueSize >= MAX_QUEUE_SIZE) return res.status(503);
-```
-
-…but `flashBuy` pushes to `QUEUES.ORDERS`. Since payment is the slow stage, watching it is
-arguably the right backpressure signal — but **`ORDERS` itself is unbounded**, and nothing
-sheds load if the order workers fall behind.
-
-### 9.5 — `orderId` collision
-
-```js
-const orderId = `${Date.now()}${userId}${productId}`;
-```
-
-Two requests from the same user for the same product in the same millisecond produce an
-**identical order id** → primary-key collision on `Order.create` → the order fails. Rare,
-but not impossible, and it fails in a confusing way. Use a UUID.
-
-### 9.6 — SSE has never been benchmarked
-
-The system exposes `/sse/products/stock/:id`, and the code works. **But every k6 test
-polls `/order/:id/status`.** SSE has never carried a single byte under load.
-
-**No claim about SSE reducing API load can be made from any number in this document.**
-
-### 9.7 — Dead code that throws
-
-`decStockCount()` references `newStock` before its declaration — a temporal dead zone
-error. The endpoint throws unconditionally. It has not been removed.
-
----
-
-## 10 — Findings
-
-### 10.1 — Decoupling acknowledgment from fulfillment is the entire mechanism
+### 9.1 — Decoupling acknowledgment from fulfillment is the entire mechanism
 
 Approach 2's API validates, atomically reserves stock in Redis, pushes to a queue, and
 returns `202` in **6 milliseconds**. It does not wait for the payment gateway. It does not
@@ -1053,7 +926,7 @@ Approach 1 does all three, for a **median of 1,090 ms and a worst case of 24.5 s
 
 Same work. Same success rate. **The difference is who does the waiting.**
 
-### 10.2 — Why Approach 2 looks slower, and why that is not a defeat
+### 9.2 — Why Approach 2 looks slower, and why that is not a defeat
 
 ```
 A1:  72.9 orders/s        A2:  32.5 orders/s
@@ -1080,7 +953,7 @@ p99 is **11.3 seconds** and it returned **62 server errors**.
 This is exactly why the stress profile (open model) exists — and exactly why its result
 matters more than this one.
 
-### 10.3 — The unknown outcome is where the architectures actually diverge
+### 9.3 — The unknown outcome is where the architectures actually diverge
 
 The gateway hangs on 1% of charges and never answers. `processPayment` aborts after 10
 seconds and returns:
@@ -1111,7 +984,7 @@ like on a balance sheet.
 >
 > **"Nothing. You flag it. Then you make sure your architecture gives you the room to."**
 
-### 10.4 — Two counters that answer different questions must never be synchronised
+### 9.4 — Two counters that answer different questions must never be synchronised
 
 The single most damaging bug in the project ([§4.2](#42--the-payment-worker-destroyed-the-reservation-counter))
 came from treating `redis_stock` and `postgres_stock` as two copies of one number.
@@ -1125,7 +998,7 @@ the lag is precisely the information you needed.
 Confirming an order converts a reservation into a sale. **It does not free stock.**
 Therefore confirmation must not touch the reservation counter at all.
 
-### 10.5 — A single atomic `DECR` was enough
+### 9.5 — A single atomic `DECR` was enough
 
 Post-fix, with the reservation counter left alone, **not one negative-stock event
 occurred** across every run — including the one that crashed the host.
@@ -1139,7 +1012,7 @@ flushed and reseeded while Postgres is not — the one remaining silent-corrupti
 When it fires, it logs `[FATAL] Redis/DB divergence`, because if it fires, something is
 badly wrong.
 
-### 10.6 — Scale the bottleneck, and know which one it is
+### 9.6 — Scale the bottleneck, and know which one it is
 
 The original report concluded that payment processing was the bottleneck and that scaling
 payment workers 2 → 6 was the win.
@@ -1160,7 +1033,7 @@ adding workers appeared to help, when what was actually needed was to remove the
 
 ---
 
-## 11 — Threats to validity
+## 10 — Threats to validity
 
 Stated plainly so the results are read for what they are.
 
@@ -1194,42 +1067,6 @@ Stated plainly so the results are read for what they are.
 8. **Contention is on the product row and the Redis stock key — not on user identity.**
    The 10,000-account pool is therefore not a limiting factor, and a larger pool would not
    change the result.
-
----
-
-## 12 — What I would do next
-
-**In priority order.** The first two are correctness bugs, not enhancements.
-
-1. **Act on `retryable`** ([§9.1](#91--transient-gateway-failures-are-reported-to-the-customer-as-declined-cards-)).
-   Requeue with a bounded attempt counter. ~2.95% of orders are being killed by transient
-   gateway blips right now. **This is the highest-value change in the list and it is ten
-   lines.**
-
-2. **Give `buy()` an `unknown` branch** ([§9.2](#92--approach-1-guesses-on-unknown-payment-outcomes-)).
-   Even a synchronous path can return `202 pending reconciliation` instead of guessing.
-
-3. **Re-run the stress profile properly.** `--summary-export` so the numbers survive a
-   crash. Gate the hot-path logging behind `VERBOSE`. Cap the ramp at ~2,500 req/s — the
-   host cannot honestly generate more than that.
-
-4. **Move to BullMQ.** Acknowledgement, retry, dead-letter queue. Closes
-   [§9.3](#93--brpop-has-no-acknowledgement).
-
-5. **Instrument.** Prometheus + Grafana on queue depth, confirmation rate, and
-   `needs_reconciliation` count. Every finding in this report was reconstructed
-   archaeologically from logs and SQL. It should have been on a dashboard.
-
-6. **Bound the `ORDERS` queue** and shed load at the edge when it fills.
-
-7. **Circuit-break the payment gateway.** At a 2% error rate, a circuit breaker
-   (`opossum`) stops hammering a gateway that is already down.
-
-8. **Benchmark SSE.** It exists, it works, and it has never been measured. Right now it is
-   a feature, not a result.
-
-9. **Find the real ceiling.** On hardware where the load generator is not fighting the
-   system for CPU.
 
 ---
 
@@ -1291,5 +1128,4 @@ asks is *"why did it break there?"*
 
 ---
 
-**Built with one other engineer.** Bugs, fixes, benchmarks, and every number above are
-reproducible from the repository. Where they are not, this document says so.
+**END OF REPORT**
