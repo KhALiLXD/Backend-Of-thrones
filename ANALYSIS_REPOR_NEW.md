@@ -20,7 +20,6 @@ This document is the rewrite. Every number here comes from a k6 run or a SQL que
 against the database after that run. Where a number is missing, it says so. Where the
 system is still wrong, it says that too — there is a whole section for it.
 
-**If you only read one thing, read [§9 — What Is Still Broken](#9--what-is-still-broken).**
 An engineering report that only lists wins is a sales document.
 
 ---
