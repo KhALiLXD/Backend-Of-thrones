@@ -163,7 +163,7 @@ export const buy = async (req, res) => {
             // The unit is now stranded: sold in the DB, never paid for.
             // Loud, because it needs manual reconciliation.
             console.error(`[buy] 🚨 STRANDED UNIT product=${productId} order=${order.id}`);
-            return res.status(409).json({
+            return res.status(500).json({
                 success: false,
                 error: 'payment failed and refund failed',
             });
@@ -172,7 +172,7 @@ export const buy = async (req, res) => {
     } catch (err) {
         await transaction.rollback().catch(() => {});
         console.error('[buy]', err.message);
-        return res.status(409).json({ success: false, error: 'purchase failed' });
+        return res.status(500).json({ success: false, error: 'purchase failed' });
     }
 };
 
